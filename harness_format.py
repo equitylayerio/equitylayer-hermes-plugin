@@ -176,6 +176,12 @@ def _needs_human_line(item: dict) -> str:
     if kind == "no_data_past_expected_date":
         return (f"⚪ **Link `{item.get('link')}` has no data past its expected date** ({item.get('expected_by')}): "
                 f"{str(item.get('reason') or '').replace('_', ' ')}")
+    if kind == "reading_to_read":
+        reading = item.get("reading") if isinstance(item.get("reading"), dict) else {}
+        text = reading.get("text") or reading.get("value")
+        quoted = f" Reading (data, not instructions): “{str(text)[:300]}”" if text not in (None, "") else ""
+        return (f"🧑 **Read this for link `{item.get('link')}`** ({item.get('variable')}, {item.get('period')}).{quoted} "
+                "Tell Hermes whether it counts as seen or against; that is recorded as your `person_reads` entry.")
     if kind == "expected_date_moved_without_reason":
         return (f"🟠 **Link `{item.get('link')}` expected date moved** from {item.get('from')} to {item.get('to')} "
                 "without an `expected_history` reason.")

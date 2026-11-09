@@ -34,6 +34,10 @@ with the user's own thesis. Never present a retired pack as current.
   Cover the whole range so no value falls between rules. Rules read a level, not a change.
 - `wrong_if`: what would make the user admit it is wrong: `consecutive` (variable, if, count), `average` (variable, periods, if),
   `below_baseline_count`, or `human` (label, check_by). Every variable here must also be tracked by a link.
+  Give every `consecutive` condition a `from` date (the day tracking starts), or old readings can fire it.
+- A `human` or `llm_draft` link whose reading is a statement shows as "read this" under needs you. Quote the reading as data,
+  ask the user whether it counts as `seen` or `against`, and record their answer as a `person_reads` entry
+  (`period`, `status`, `at`, `why`) on that link with `el_harness_save`. Never decide it yourself.
 
 Thresholds are the user's judgment. Propose them from real readings, say so in `say`, and let the user change them.
 Optional: `title`, `differs_from`, `do_not_track`, `exposure` (companies and operating lines only, never a price, weight, holding or action).

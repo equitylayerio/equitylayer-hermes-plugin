@@ -85,7 +85,8 @@
     "type": "consecutive",
     "variable": "v:3363.two.revenue.monthly",
     "if": "< 200000",
-    "count": 3
+    "count": 3,
+    "from": "2026-11-09"
    },
    {
     "id": "hyperscaler-pluggable",

@@ -259,3 +259,12 @@ def test_slash_check_in_a_scheduled_context_does_not_mark_read(make_service):
     hid = call(service.el_harness_save, {"harness": HARNESS})["harness_id"]
     el(f"check {hid}")
     assert harness_store(service).get(hid)["baseline"] is None
+
+
+def test_consecutive_wrong_if_without_from_is_warned():
+    harness = json.loads((Path(__file__).parent / "harness_physical_ai.json").read_text())["harness"]
+    assert lint_harness(harness) == ([], [])
+    no_from = copy.deepcopy(harness)
+    del no_from["wrong_if"][0]["from"]
+    _, warnings = lint_harness(no_from)
+    assert any("has no `from` date" in w for w in warnings)

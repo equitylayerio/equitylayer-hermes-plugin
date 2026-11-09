@@ -72,6 +72,12 @@ def lint_harness(harness: Any, known_ids: set[str] | None = None) -> tuple[list[
                 warnings.append(
                     f"Link `{link.get('id')}` uses ids that were not in the last plan: {', '.join(unknown)}."
                 )
+    for condition in harness.get("wrong_if") or []:
+        if isinstance(condition, dict) and condition.get("type") == "consecutive" and not condition.get("from"):
+            warnings.append(
+                f"wrong_if `{condition.get('id')}` has no `from` date, so readings from before today can fire it. "
+                "Set `from` to the day you start tracking."
+            )
     if isinstance(harness.get("wrong_if"), list) and not harness["wrong_if"]:
         warnings.append("`wrong_if` is empty, so nothing could show the thesis is wrong.")
     return errors, warnings

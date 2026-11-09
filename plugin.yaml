@@ -3,12 +3,12 @@ version: "0.2.0"
 manifest_version: 2
 api_version: 1
 description: >
-  Bring your own investment thesis to Hermes. EquityLayer's MCP maps it to catalog
-  variables (revenue, segments, capex, issuer statements) with caveats and coverage gaps;
-  you write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
-  harness and its baseline on your machine and checks it on a schedule, reporting which
-  links moved, what is late, and what needs a person. EquityLayer stores nothing. It never
-  says what to buy, sell, size or time. Also lists published Research Packs.
+  Research CPO, Physical AI and space infrastructure with your own AI.
+  EquityLayer's MCP maps your thesis to tracked variables with caveats and gaps; you
+  write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
+  harness and baseline on your machine and checks it on a schedule, reporting which
+  links moved, what is late, and what needs a person. EquityLayer stores nothing. It
+  never says what to buy, sell, size or time. Also lists published Research Packs.
 author: EquityLayer
 license: MIT
 homepage: https://equitylayer.io

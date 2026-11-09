@@ -1,0 +1,110 @@
+{
+ "harness": {
+  "title": "Robots reach volume by 2028",
+  "hypothesis": "General-purpose and industrial robots move from pilots to volume production by the end of 2028, and component suppliers show it in shipments before humanoid makers report robot revenue.",
+  "why": "Robot makers have to procure sensors, actuators and test capacity quarters before finished robots ship in volume, so supplier shipments and robotics segments should rise first.",
+  "tracking": [
+   {
+    "id": "hesai-robot-lidar",
+    "must_hold": "Hesai's robotics lidar shipments stay at or above their latest quarterly level.",
+    "variables": [
+     "v:hsai.us.robotics_lidar_shipments.quarterly"
+    ],
+    "runner": "rules",
+    "expected_by": "2027-03-31",
+    "if_late": "No new quarter to read; robot sensor demand is unconfirmed.",
+    "if_against": "Robot sensor demand is not compounding.",
+    "rules": [
+     {
+      "variable": "v:hsai.us.robotics_lidar_shipments.quarterly",
+      "if": ">= 140000",
+      "means": "strengthens",
+      "say": "At or above the FY2026-Q2 level (my judgment)."
+     },
+     {
+      "variable": "v:hsai.us.robotics_lidar_shipments.quarterly",
+      "if": "100000..140000",
+      "means": "no_material_change",
+      "say": "Between the FY2026-Q1 and Q2 levels (my judgment)."
+     },
+     {
+      "variable": "v:hsai.us.robotics_lidar_shipments.quarterly",
+      "if": "< 100000",
+      "means": "weakens",
+      "say": "Back below the FY2026-Q1 level (my judgment)."
+     }
+    ]
+   },
+   {
+    "id": "teradyne-robotics",
+    "must_hold": "Teradyne's Robotics segment revenue holds near its recent high.",
+    "variables": [
+     "v:ter.us.robotics_revenue.quarterly"
+    ],
+    "runner": "rules",
+    "expected_by": "2027-03-31",
+    "if_late": "No new quarter to read.",
+    "if_against": "Industrial robot demand at the cobot layer is softening.",
+    "rules": [
+     {
+      "variable": "v:ter.us.robotics_revenue.quarterly",
+      "if": ">= 100",
+      "means": "strengthens",
+      "say": "At or above the FY2026-Q2 high (my judgment)."
+     },
+     {
+      "variable": "v:ter.us.robotics_revenue.quarterly",
+      "if": "85..100",
+      "means": "no_material_change",
+      "say": "Between FY2025-Q4 and the Q2 high (my judgment)."
+     },
+     {
+      "variable": "v:ter.us.robotics_revenue.quarterly",
+      "if": "< 85",
+      "means": "weakens",
+      "say": "Below the FY2025-Q4 level (my judgment)."
+     }
+    ]
+   },
+   {
+    "id": "optimus-volume",
+    "must_hold": "Tesla gives an Optimus unit or capacity figure, not only a production-start statement.",
+    "variables": [
+     "v:tsla.us.optimus_production_statement.quarterly"
+    ],
+    "runner": "human",
+    "expected_by": "2027-06-30",
+    "if_late": "Humanoid volume is still a statement, not a number.",
+    "if_against": "Tesla pushes humanoid volume out."
+   },
+   {
+    "id": "harmonic-ai-robot-orders",
+    "must_hold": "Harmonic Drive's AI robot orders keep rising.",
+    "variables": [
+     "v:6324.t.ai_robot_orders.quarterly"
+    ],
+    "runner": "human",
+    "expected_note": "Next quarterly results.",
+    "if_late": "No readable order data.",
+    "if_against": "Robot maker orders are not following component shipments."
+   }
+  ],
+  "wrong_if": [
+   {
+    "id": "hesai-two-down",
+    "label": "Hesai robotics lidar shipments below 100,000 units for two quarters in a row.",
+    "type": "consecutive",
+    "variable": "v:hsai.us.robotics_lidar_shipments.quarterly",
+    "if": "< 100000",
+    "count": 2,
+    "from": "2026-11-09"
+   },
+   {
+    "id": "optimus-slips",
+    "label": "Tesla says Optimus volume production slips past 2027.",
+    "type": "human",
+    "check_by": "2027-06-30"
+   }
+  ]
+ }
+}
