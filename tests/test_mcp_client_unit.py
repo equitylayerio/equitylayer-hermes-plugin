@@ -6,7 +6,6 @@ from equitylayer_plugin.mcp_client import (
     McpClient,
     McpError,
     extract_tool_payload,
-    full_route,
     parse_rpc_response,
     validate_mcp_url,
 )
@@ -78,11 +77,6 @@ def test_url_allowlist_refuses(url):
 def test_url_allowlist_accepts(url):
     assert validate_mcp_url(url) == url
 
-
-def test_full_route_is_derived_from_the_configured_server():
-    assert full_route("https://equitylayer.io/mcp") == "https://equitylayer.io/mcp/full"
-    assert full_route("http://localhost:3420/mcp/") == "http://localhost:3420/mcp/full"
-    assert full_route("https://equitylayer.io/mcp/full") == "https://equitylayer.io/mcp/full"
 
 
 def _client(handler):

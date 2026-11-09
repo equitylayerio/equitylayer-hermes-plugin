@@ -7,7 +7,7 @@ from typing import Any
 
 from . import harness_format
 from .harness_store import HarnessStore, is_due
-from .mcp_client import McpClient, McpError, full_route
+from .mcp_client import McpError
 
 # Words that turn a thesis into an order. The harness tracks evidence, so they get a warning.
 TRADE_WORDS = re.compile(
@@ -151,8 +151,7 @@ class HarnessTools:
         if not variable.startswith("v:"):
             return {"ok": False, "error": "missing_argument", "argument": "variable",
                     "message": "Give a variable id from el_plan_thesis, for example v:3363.two.revenue.monthly."}
-        url = full_route(str(self._get_config("mcp_url", default=None) or "https://equitylayer.io/mcp"))
-        data = McpClient(url, transport=self._transport).call_tool("get_variable", {"variable": variable})
+        data = self._call("get_variable", {"variable": variable})
         return {
             "ok": True,
             "variable": variable,

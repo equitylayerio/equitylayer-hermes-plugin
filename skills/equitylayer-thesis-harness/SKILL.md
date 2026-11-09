@@ -7,6 +7,7 @@ description: Track the user's own investment thesis with EquityLayer. Plan varia
 
 Use this when the user states an investment thesis of their own and wants to know what to watch and when to look again.
 EquityLayer stores neither the thesis nor the harness. This plugin keeps both on the user's machine.
+EquityLayer's own description of this loop is https://equitylayer.io/skills/thesis-harness.md; the plugin tools below follow it.
 
 ## 1. Check for published research first
 
@@ -15,7 +16,8 @@ with the user's own thesis. Never present a retired pack as current.
 
 ## 2. Find variables (careful step, do it with the user)
 
-1. Call `el_plan_thesis` with the thesis text, plus a `theme_id`, companies (`entities`) and `keywords` if the user gave them.
+1. Ask the user for the thesis in their own words and which companies or terms they mean. Then call `el_plan_thesis`
+   with the thesis text, a `theme_id` if one fits, the companies as `entities`, and the terms as `keywords`.
 2. Show the `markdown`. Choose **only** ids listed in `candidates`. Never write an id that is not listed.
 3. Read every caveat aloud to the user. A caveat says what a variable cannot show. Avoid an `aggregate` unless the thesis is about the total.
 4. Tell the user about `gaps` and unmatched terms. Do not stretch a variable to fit: leave the link's `variables` empty and fill `variable_gap`.

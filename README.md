@@ -124,7 +124,7 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 
 ## Disclosures
 
-- **Network:** every call goes over HTTPS to `https://equitylayer.io/mcp` (and `/mcp/full` for `get_variable`). The URL setting accepts only that host, or `http://localhost` for development. No other host is contacted.
+- **Network:** every call goes over HTTPS to `https://equitylayer.io/mcp`. The URL setting accepts only that host, or `http://localhost` for development. No other host is contacted.
 - **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server reports that it stores neither the thesis nor the harness (`"stored": false` in its responses). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.2`.
 - **Local data:** harnesses, baselines, a 30-entry check history and Follow Cards are written under Hermes's `plugin-data/equitylayer/` for the active profile. Nothing else on disk is read.
 - **No credentials:** the plugin holds no key and never pays. A paid or gated response comes back as `entitlement_or_payment_required` with a link; the plugin does not authenticate or pay for you.

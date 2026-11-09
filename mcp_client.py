@@ -58,12 +58,6 @@ def validate_mcp_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def full_route(url: str) -> str:
-    """The same server's /mcp/full route, which carries get_variable."""
-    base = validate_mcp_url(url)
-    return base if base.endswith("/mcp/full") else base + "/full"
-
-
 def parse_rpc_response(content_type: str, body: str, request_id: int) -> dict:
     """Return the JSON-RPC message for `request_id` from a JSON or SSE body."""
     if "text/event-stream" in (content_type or ""):

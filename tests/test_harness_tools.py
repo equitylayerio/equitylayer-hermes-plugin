@@ -38,12 +38,12 @@ def test_plan_needs_a_real_sentence(make_service):
     assert transport.calls == []
 
 
-def test_get_variable_uses_the_full_route_of_the_configured_server(make_service):
+def test_get_variable_uses_the_configured_core_route(make_service):
     service, transport, _ = make_service({"get_variable": "get_variable_foci"},
                                          {"mcp_url": "http://localhost:3420/mcp"})
     result = call(service.el_get_variable, {"variable": "v:3363.two.revenue.monthly"})
     assert result["ok"] and result["unit"] == "TWD thousand"
-    assert transport.paths == ["/mcp/full"]
+    assert transport.paths == ["/mcp"]
     assert call(service.el_get_variable, {"variable": "3363"})["error"] == "missing_argument"
 
 
