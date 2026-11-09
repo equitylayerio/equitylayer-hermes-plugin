@@ -1,23 +1,29 @@
 name: equitylayer
-version: "0.1.0"
+version: "0.2.0"
 manifest_version: 2
 api_version: 1
 description: >
-  EquityLayer research inside Hermes: list the Research Registry, open public
-  research packs, scorecards, and thesis tests via https://equitylayer.io/mcp,
-  and follow research with locally stored Follow Cards and scheduled checks.
-  Demo mode uses free public research only. The plugin never pays.
+  Bring your own investment thesis to Hermes. EquityLayer's MCP maps it to catalog
+  variables (revenue, segments, capex, issuer statements) with caveats and coverage gaps;
+  you write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
+  harness and its baseline on your machine and checks it on a schedule, reporting which
+  links moved, what is late, and what needs a person. EquityLayer stores nothing. It never
+  says what to buy, sell, size or time. Also lists published Research Packs.
 author: EquityLayer
 license: MIT
 homepage: https://equitylayer.io
-tags: [finance, research, equities, mcp, taiwan, ai-compute]
+tags: [finance, research, equities, thesis, mcp, cpo, physical-ai, space]
 
 provides_tools:
+  - el_plan_thesis
+  - el_get_variable
+  - el_harness_save
+  - el_harness_check
+  - el_harness_seen
+  - el_harness_list
   - el_list_registry
   - el_get_pack
   - el_scorecard
-  - el_test_thesis
-  - el_thesis_update
   - el_follow_create
   - el_follow_check
   - el_follow_list
@@ -29,9 +35,4 @@ config_schema:
     type: str
     default: "https://equitylayer.io/mcp"
     label: "EquityLayer MCP URL"
-    description: "https://equitylayer.io/mcp (default). https://equitylayer.io/mcp/full needs demo mode off. Other hosts are refused."
-  demo_mode:
-    type: bool
-    default: true
-    label: "Demo / free-only mode"
-    description: "When on, only the public product route and public registry entries are used, and private thesis cards are not sent."
+    description: "https://equitylayer.io/mcp (default). http://localhost:<port>/mcp is accepted for development. Other hosts are refused."

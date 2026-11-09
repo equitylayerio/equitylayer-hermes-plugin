@@ -11,9 +11,9 @@ _FORMAT = {
 EL_LIST_REGISTRY = {
     "name": "el_list_registry",
     "description": (
-        "Start here to find EquityLayer research. Lists Research Registry views and packs with "
-        "access, freshness and next check date, plus a markdown table. Entries marked locked are not "
-        f"available in demo mode. {_NOT_ADVICE}"
+        "List published EquityLayer Research Packs with access, freshness and next check date. It may be empty: "
+        "when no Pack is current, say so plainly and offer el_plan_thesis for the user's own thesis instead. "
+        f"Entries marked locked are not on the free path. {_NOT_ADVICE}"
     ),
     "parameters": {
         "type": "object",
@@ -69,53 +69,6 @@ EL_SCORECARD = {
     },
 }
 
-EL_TEST_THESIS = {
-    "name": "el_test_thesis",
-    "description": (
-        "Test a public EquityLayer view against its retained evidence packs. Prefer thesis_id from the "
-        "registry. Saves the pack versions locally so el_thesis_update can compare later. Send a private "
-        f"thesis only when the user asks; demo mode refuses it. {_NOT_ADVICE}"
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "thesis_id": {"type": "string", "description": "Public view id from el_list_registry."},
-            "thesis": {"type": "object", "description": "Caller-supplied private Thesis Card. Off in demo mode."},
-            "last_pack_versions": {"type": "array", "items": {"type": "object"},
-                                   "description": "Optional caller-owned pack baselines."},
-            "format": _FORMAT,
-        },
-    },
-}
-
-EL_THESIS_UPDATE = {
-    "name": "el_thesis_update",
-    "description": (
-        "Check whether a public view or its supporting pack changed since the saved baseline. Uses the "
-        "baseline saved by el_test_thesis unless since_pack_versions is given. A current result is free; "
-        f"this route has no payment. {_NOT_ADVICE}"
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "thesis_id": {"type": "string", "description": "Public view id from el_list_registry."},
-            "since_thesis_version": {"type": "string", "description": "Optional last view version seen."},
-            "since_pack_versions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {"pack_id": {"type": "string"}, "version": {"type": "string"}},
-                    "required": ["pack_id", "version"],
-                },
-                "description": "Optional pack baselines. Defaults to the locally saved baseline.",
-            },
-            "portable_research_card": {"type": "object",
-                                       "description": "Complete private research card. Off in demo mode."},
-            "format": _FORMAT,
-        },
-    },
-}
-
 EL_FOLLOW_CREATE = {
     "name": "el_follow_create",
     "description": (
@@ -165,5 +118,113 @@ EL_FOLLOW_LIST = {
         "properties": {
             "due_only": {"type": "boolean", "description": "Only list follows that are due or need review."},
         },
+    },
+}
+
+
+_THEMES = ["ai_compute", "optical_cpo", "custom_asic", "ai_power_thermal", "physical_ai", "space_infrastructure"]
+_STOP = (
+    "Stop at the person: relay statuses and everything under needs_human, then stop. Never change the "
+    "hypothesis, a threshold or a status yourself, and never say what to buy, sell, size or time."
+)
+
+EL_PLAN_THESIS = {
+    "name": "el_plan_thesis",
+    "description": (
+        "Step 1 for the user's OWN investment thesis. Sends the thesis text to EquityLayer, which stores nothing, "
+        "and returns candidate variables from a fixed catalog with cadence, latest period, caveats and coverage "
+        "gaps. Choose variables only from these candidates, read every caveat, and tell the user about gaps. "
+        "Selecting variables takes care: do it with the user. " + _NOT_ADVICE
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "thesis_text": {"type": "string", "description": "The thesis in the user's words, any language."},
+            "theme_id": {"type": "string", "enum": _THEMES,
+                         "description": "Optional theme; adds its company universe to the search."},
+            "entities": {"type": "array", "items": {"type": "string"},
+                         "description": "Companies meant, as ticker or name, e.g. 3363.TWO or Coherent."},
+            "keywords": {"type": "array", "items": {"type": "string"},
+                         "description": "Extra terms, e.g. revenue, gross margin, orders."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 60, "description": "Default 25."},
+        },
+        "required": ["thesis_text"],
+    },
+}
+
+EL_GET_VARIABLE = {
+    "name": "el_get_variable",
+    "description": (
+        "Read one catalog variable: unit, cadence, caveat, scope breaks and recent readings, so thresholds can "
+        "be set from real levels. A withheld value is null with its reason: treat it as no data, never guess it."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"variable": {"type": "string", "description": "A v:... id from el_plan_thesis."}},
+        "required": ["variable"],
+    },
+}
+
+EL_HARNESS_SAVE = {
+    "name": "el_harness_save",
+    "description": (
+        "Save the user's thesis harness on this machine (EquityLayer keeps no copy). The harness has four parts: "
+        "hypothesis (one falsifiable sentence), why, tracking (links: id, must_hold, variables, runner "
+        "program|rules|llm_draft|human, expected_by YYYY-MM-DD or expected_note, if_late, if_against, rules "
+        "[{variable, if: '>= N' | '< N' | 'a..b', means: strengthens|weakens|no_material_change|"
+        "insufficient_evidence, say}]) and wrong_if (consecutive | average | below_baseline_count | human). "
+        "Rule variables must be in that link's variables; thresholds are the user's judgment, say so in `say`. "
+        "EquityLayer validates it before it is stored. Pass harness_id to update a saved harness."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "harness": {"type": "object", "description": "The full harness object as check_thesis_harness expects."},
+            "harness_id": {"type": "string", "description": "Existing local id to replace. Omit to create."},
+        },
+        "required": ["harness"],
+    },
+}
+
+EL_HARNESS_CHECK = {
+    "name": "el_harness_check",
+    "description": (
+        "Check a saved harness against the latest readings. Returns each link's status (not_due, seen, against, "
+        "late, no_data), wrong_if results, needs_human items, what changed since the saved baseline, and next "
+        "due date. With harness_id checks that one; with no arguments checks every harness that is due; with "
+        "`harness` checks an unsaved draft. no_data is not good news. The new baseline is kept only after the "
+        "user says they have read the result (el_harness_seen). " + _STOP
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "harness_id": {"type": "string", "description": "A local id from el_harness_list."},
+            "harness": {"type": "object", "description": "An unsaved draft harness to check without storing it."},
+        },
+    },
+}
+
+EL_HARNESS_SEEN = {
+    "name": "el_harness_seen",
+    "description": (
+        "Call only after the user has said they read the latest check. Saves that check's next_baseline so the "
+        "next check reports only what moved since. Scheduled runs are refused."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"harness_id": {"type": "string", "description": "A local id from el_harness_list."}},
+        "required": ["harness_id"],
+    },
+}
+
+EL_HARNESS_LIST = {
+    "name": "el_harness_list",
+    "description": (
+        "List the thesis harnesses saved on this machine with last check, link statuses, needs-you count, next "
+        "due date and state. With harness_id returns that harness in full (to show or edit it). Local only."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"harness_id": {"type": "string", "description": "Optional local id to open in full."}},
     },
 }

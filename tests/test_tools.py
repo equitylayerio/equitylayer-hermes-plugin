@@ -18,7 +18,7 @@ def call(handler, args=None, **kwargs):
 def test_registry_marks_non_public_rows_locked_without_fetching(make_service):
     service, transport, _ = make_service({"list_registry": "list_registry"})
     result = call(service.el_list_registry)
-    assert result["ok"] and result["demo_mode"] is True
+    assert result["ok"]
     assert all(e["locked"] is False for e in result["entries"])
     assert "tw-monthly-revenue" in result["markdown"]
     assert transport.names() == ["list_registry"]
@@ -60,28 +60,27 @@ def test_missing_argument_is_a_json_error(make_service, handler, args, argument)
 def test_handlers_never_raise_on_bad_input(make_service):
     service, _, _ = make_service()
     assert call(service.el_get_pack, None)["ok"] is False
-    assert call(service.el_follow_check, {"follow_id": "../../x"})["error"] == "internal_error"
+    assert call(service.el_follow_check, {"follow_id": "../../x"})["error"] == "invalid_argument"
+    assert call(service.el_harness_check, {"harness_id": "../../x"})["error"] == "invalid_argument"
 
 
-def test_demo_mode_maps_entitlement_error_shape(make_service):
+def test_entitlement_error_shape(make_service):
     service, _, _ = make_service({"get_research_pack": "entitlement_brief_shape"})
     result = call(service.el_get_pack, {"pack_id": "ai-compute-pcb-ccl-value-capture"})
     assert result == {
         "ok": False,
         "error": "entitlement_or_payment_required",
-        "demo_mode": True,
         "upstream_error": "agent_authentication_required",
-        "hint": "Disable demo_mode and complete EquityLayer agent activation / payment only with user consent.",
+        "hint": "This plugin holds no credential and never pays. Use public research or your own thesis harness.",
         "pricing_url": "https://equitylayer.io/pricing",
         "pack_id": "ai-compute-pcb-ccl-value-capture",
     }
 
 
-def test_http_402_never_pays_even_with_demo_mode_off(make_service):
-    service, transport, _ = make_service({"get_research_pack": 402}, {"demo_mode": False})
+def test_http_402_never_pays(make_service):
+    service, transport, _ = make_service({"get_research_pack": 402})
     result = call(service.el_get_pack, {"pack_id": PACK})
     assert result["error"] == "entitlement_or_payment_required"
-    assert result["demo_mode"] is False
     assert "never pays" in result["hint"]
     assert len(transport.calls) == 1
 
@@ -93,22 +92,9 @@ def test_live_unavailable_error_gets_a_registry_hint(make_service):
     assert "el_list_registry" in result["hint"]
 
 
-def test_demo_mode_refuses_full_route_and_other_hosts(make_service):
-    service, transport, _ = make_service({}, {"mcp_url": "https://equitylayer.io/mcp/full"})
-    assert call(service.el_list_registry)["error"] == "demo_mode_requires_product_route"
-    service, transport2, _ = make_service({}, {"mcp_url": "https://evil.example/mcp", "demo_mode": False})
+def test_other_hosts_are_refused_without_a_call(make_service):
+    service, transport, _ = make_service({}, {"mcp_url": "https://evil.example/mcp"})
     assert call(service.el_list_registry)["error"] == "invalid_mcp_url"
-    assert transport.calls == [] and transport2.calls == []
-
-
-def test_demo_mode_does_not_send_private_research(make_service):
-    service, transport, _ = make_service()
-    assert call(service.el_test_thesis, {"thesis": {"statement": "x"}})["error"] == (
-        "private_research_disabled_in_demo_mode"
-    )
-    assert call(service.el_thesis_update, {"portable_research_card": {"a": 1}})["error"] == (
-        "private_research_disabled_in_demo_mode"
-    )
     assert transport.calls == []
 
 
@@ -119,30 +105,11 @@ def test_scorecard(make_service):
     assert transport.calls == [("get_pack_scorecard", {"id": VIEW})]
 
 
-def test_test_thesis_saves_baseline_used_by_update(make_service):
-    service, transport, store = make_service(
-        {"test_thesis": "test_thesis", "get_thesis_update": "thesis_update_current"}
-    )
-    assert call(service.el_test_thesis, {"thesis_id": VIEW})["overall_thesis_effect"] == "insufficient_evidence"
-    baseline = [{"pack_id": PACK, "version": "taiwan-monthly-revenue:2026-09"}]
-    assert store.get_baseline(VIEW) == baseline
-    result = call(service.el_thesis_update, {"thesis_id": VIEW})
-    assert result["status"] == "current" and result["billable"] is False
-    assert transport.calls[-1] == ("get_thesis_update", {"thesis_id": VIEW, "since_pack_versions": baseline})
-
-
-def test_update_without_baseline_explains_the_next_step(make_service):
-    service, _, _ = make_service({"get_thesis_update": "thesis_update_baseline_missing"})
-    result = call(service.el_thesis_update, {"thesis_id": VIEW})
-    assert result["error"] == "baseline_missing"
-    assert "el_test_thesis" in result["hint"]
-
-
 def test_follow_create_persists_card_and_reports_next_check(make_service):
     service, _, store = make_service({"create_research_follow": "create_follow_pack"})
     result = call(service.el_follow_create, {"pack_id": PACK})
     assert result["ok"] and result["next_check_at"] == "2026-11-10"
-    assert "/el check follow_" in result["schedule_hint"]
+    assert "/el follow-check follow_" in result["schedule_hint"]
     assert "/blueprint equitylayer:follow-check" in result["schedule_hint"]
     assert store.get(result["follow_id"])["follow_card"]["pack_id"] == PACK
 
@@ -291,7 +258,7 @@ def test_slash_flow_end_to_end(make_service):
     }
     service, transport, store = make_service(routes)
     el = commands.make_slash_handler(service)
-    assert "/el registry" in el("") and "/el registry" in el("help")
+    assert "/el plan" in el("") and "/el registry" in el("help")
     assert "tw-monthly-revenue" in el("registry")
     assert "Taiwan Stock Exchange" in el("pack tw-monthly-revenue")
     assert "Scorecard" in el(f"scorecard {VIEW}")
@@ -300,7 +267,7 @@ def test_slash_flow_end_to_end(make_service):
     assert transport.calls[-1] == ("create_research_follow", {"thesis_id": VIEW})
     follow_id = store.all()[0][0]["follow_id"]
     assert follow_id in el("follows", session_id="s", platform="cli")
-    assert "current" in el(f"check {follow_id}")
+    assert "current" in el(f"follow-check {follow_id}")
     assert "Removed" in el(f"unfollow {follow_id}")
     assert "No local follows yet" in el("follows")
 
@@ -311,14 +278,18 @@ def test_slash_errors_are_readable(make_service):
     assert "missing_argument" in el("pack")
     assert "unknown_registry_entry" in el("follow nope")
     assert "Usage" in el("follow")
-    assert "/el registry" in el("nonsense")
+    assert "/el plan" in el("nonsense")
 
 
 def test_schedule_snippet_is_shell_safe_and_never_accepts():
     text = commands.schedule_text("08:30", "Asia/Taipei")
     assert "hermes cron create '30 8 * * *'" in text
+    assert "--skill equitylayer:equitylayer-thesis-harness" in text
     assert "--skill equitylayer:equitylayer-research" in text
     assert "--timezone Asia/Taipei" in text
-    assert "/blueprint equitylayer:follow-check" in text
-    assert "Never set accept_next" in commands.CRON_PROMPT
-    assert "[SILENT]" in commands.CRON_PROMPT
+    assert "/blueprint equitylayer:thesis-check" in text
+    assert "Never set accept_next" in commands.FOLLOW_CRON_PROMPT
+    assert "never call el_harness_seen" in commands.THESIS_CRON_PROMPT
+    assert "[SILENT]" in commands.THESIS_CRON_PROMPT and "[SILENT]" in commands.FOLLOW_CRON_PROMPT
+    with pytest.raises(ValueError):
+        commands.schedule_text("25:00")

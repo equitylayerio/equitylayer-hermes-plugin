@@ -6,6 +6,7 @@ from equitylayer_plugin.mcp_client import (
     McpClient,
     McpError,
     extract_tool_payload,
+    full_route,
     parse_rpc_response,
     validate_mcp_url,
 )
@@ -45,6 +46,9 @@ def test_response_without_matching_id_is_an_error():
     "url",
     [
         "http://equitylayer.io/mcp",
+        "http://192.168.0.10:3420/mcp",
+        "http://localhost:3420/admin",
+        "https://localhost/mcp/x",
         "https://evil.example/mcp",
         "https://equitylayer.io.evil.example/mcp",
         "https://sub.equitylayer.io/mcp",
@@ -62,9 +66,23 @@ def test_url_allowlist_refuses(url):
     assert err.value.code == "invalid_mcp_url"
 
 
-@pytest.mark.parametrize("url", ["https://equitylayer.io/mcp", "https://equitylayer.io/mcp/full"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://equitylayer.io/mcp",
+        "https://equitylayer.io/mcp/full",
+        "http://localhost:3420/mcp",
+        "http://127.0.0.1:3420/mcp/full",
+    ],
+)
 def test_url_allowlist_accepts(url):
     assert validate_mcp_url(url) == url
+
+
+def test_full_route_is_derived_from_the_configured_server():
+    assert full_route("https://equitylayer.io/mcp") == "https://equitylayer.io/mcp/full"
+    assert full_route("http://localhost:3420/mcp/") == "http://localhost:3420/mcp/full"
+    assert full_route("https://equitylayer.io/mcp/full") == "https://equitylayer.io/mcp/full"
 
 
 def _client(handler):
@@ -121,8 +139,9 @@ def test_is_error_string_and_object_shapes():
     assert err.value.details["known_pack_ids"] == ["tw-monthly-revenue"]
 
     with pytest.raises(McpError) as err:
-        _client(lambda r: sse("thesis_update_baseline_missing")).call_tool("get_thesis_update")
-    assert err.value.code == "baseline_missing"
+        _client(lambda r: sse("check_harness_invalid")).call_tool("check_thesis_harness")
+    assert err.value.code == "invalid_arguments"
+    assert err.value.message.startswith("harness.why")
 
 
 def test_x402_in_rpc_error_is_payment_required():

@@ -36,9 +36,22 @@ def _join(*blocks: Any) -> str:
     return "\n\n".join(block for block in blocks if block)
 
 
-def format_registry(entries: list[dict], registry_url: Any = None) -> str:
+def format_registry(
+    entries: list[dict], registry_url: Any = None, *, note: Any = None, industries: Any = None
+) -> str:
+    source = f"Source: EquityLayer Research Registry — {registry_url}" if registry_url else ""
     if not entries:
-        return "No Research Registry entries were returned."
+        covered = ", ".join(map(str, industries)) if isinstance(industries, list) and industries else ""
+        return _join(
+            "## EquityLayer Research Registry",
+            "**No Research Pack is published right now.** The registry lists released or in-review entries only, "
+            "and none is current. Older monthly-revenue packs are retired and are not shown as current.",
+            f"Industries in research: {covered}." if covered else "",
+            str(note) if note else "",
+            "You can still track **your own thesis** against EquityLayer's variable catalog: "
+            "`/el plan <your thesis in a sentence>`.",
+            source,
+        )
     rows = [
         [
             entry.get("id"),
@@ -51,11 +64,10 @@ def format_registry(entries: list[dict], registry_url: Any = None) -> str:
         for entry in entries
     ]
     table = _table(["id", "kind", "title", "access", "fresh until", "next check"], rows)
-    source = f"Source: EquityLayer Research Registry — {registry_url}" if registry_url else ""
     return _join(
         "## EquityLayer Research Registry",
         table,
-        "Next: `/el pack <id>`, `/el test <view id>`, `/el scorecard <id>`, or `/el follow <id>`.",
+        "Next: `/el pack <id>`, `/el scorecard <id>`, or `/el follow <id>`.",
         source,
     )
 
@@ -207,45 +219,6 @@ def format_scorecard(data: dict) -> str:
     )
 
 
-def format_thesis_test(data: dict) -> str:
-    thesis = data.get("thesis") if isinstance(data.get("thesis"), dict) else {}
-    boundary = data.get("evidence_boundary") if isinstance(data.get("evidence_boundary"), dict) else {}
-    tests = [
-        [t.get("assumption_id"), t.get("verification_status"), t.get("thesis_effect"), t.get("effect_rationale")]
-        for t in data.get("assumption_tests") or []
-        if isinstance(t, dict)
-    ]
-    packs = [f"`{p.get('pack_id')}` at `{p.get('version')}`" for p in boundary.get("pack_versions") or []]
-    return _join(
-        f"## Thesis test: `{data.get('thesis_id') or 'caller thesis'}`",
-        f"**View:** {thesis['statement']}" if thesis.get("statement") else "",
-        f"**Overall effect:** {data.get('overall_thesis_effect')} · evidence as of {data.get('as_of')}"
-        f" · fresh until {data.get('fresh_until')}",
-        data.get("effect_rationale") or "",
-        _section("Assumption tests", _table(["assumption", "status", "effect", "why"], tests) if tests else ""),
-        f"**Evidence packs:** {', '.join(packs)}" if packs else "",
-        _section("Evidence limits", _bullets(boundary.get("limits"))),
-        _section("Unknowns", _bullets(data.get("unknowns"))),
-        f"**Next trigger:** {data['next_trigger']}" if data.get("next_trigger") else "",
-        DISCLAIMER,
-    )
-
-
-def format_thesis_update(data: dict) -> str:
-    packs = data.get("current_pack_versions")
-    packs_text = ", ".join(f"`{k}` at `{v}`" for k, v in packs.items()) if isinstance(packs, dict) else ""
-    changed = data.get("what_changed")
-    return _join(
-        f"## Thesis update: `{data.get('thesis_id')}`",
-        f"**Status:** {data.get('status')}" + (f" ({data['reason']})" if data.get("reason") else "")
-        + f" · evidence as of {data.get('as_of')} · fresh until {data.get('fresh_until')}",
-        f"**Current packs:** {packs_text}" if packs_text else "",
-        _section("What changed", _bullets(changed)) if isinstance(changed, list) else "",
-        f"**Next trigger:** {data['next_trigger']}" if data.get("next_trigger") else "",
-        DISCLAIMER,
-    )
-
-
 def format_follow_created(record: dict, schedule_hint: str, already_following: bool = False) -> str:
     verb = "Already following" if already_following else "Now following"
     return _join(
@@ -259,7 +232,7 @@ def format_follow_created(record: dict, schedule_hint: str, already_following: b
 
 def format_follow_list(rows: list[dict], unreadable: list[str], schedule_hint: str) -> str:
     if not rows and not unreadable:
-        return "No local follows yet. Try `/el registry`, then `/el follow <id>`."
+        return "No local follows yet. Try `/el registry`, then `/el follow <id>` once a Pack is published."
     table = _table(
         ["follow id", "target", "kind", "fresh until", "next check", "state"],
         [
@@ -286,7 +259,7 @@ def format_check(result: dict) -> str:
     ]
     if review:
         lines.append(
-            f"Review the change, then run `/el check {follow_id} --accept` to move this follow to the new "
+            f"Review the change, then run `/el follow-check {follow_id} --accept` to move this follow to the new "
             "baseline. The stored card stays unchanged until then."
         )
     return _join(*lines)

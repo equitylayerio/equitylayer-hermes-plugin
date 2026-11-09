@@ -11,7 +11,7 @@ import httpx
 DEFAULT_MCP_URL = "https://equitylayer.io/mcp"
 ALLOWED_HOST = "equitylayer.io"
 ALLOWED_PATHS = ("/mcp", "/mcp/full")
-USER_AGENT = "EquityLayerHermesPlugin/0.1"
+USER_AGENT = "EquityLayerHermesPlugin/0.2"
 TIMEOUT_SECONDS = 45.0
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 RETRYABLE_STATUS = (502, 503, 504)
@@ -27,17 +27,23 @@ class McpError(Exception):
         self.details = details
 
 
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
 def validate_mcp_url(url: str) -> str:
-    """Allow HTTPS to equitylayer.io only, so config can never become an SSRF."""
+    """Allow HTTPS to equitylayer.io, or plain HTTP to this machine for development.
+
+    Nothing else is accepted, so a config value can never point the plugin at another host.
+    """
     try:
         parts = urlsplit(url)
         port = parts.port
     except (ValueError, AttributeError) as exc:
         raise McpError("invalid_mcp_url", f"Could not parse MCP URL: {url!r}") from exc
+    production = parts.scheme == "https" and parts.hostname == ALLOWED_HOST and port in (None, 443)
+    loopback = parts.scheme == "http" and parts.hostname in LOOPBACK_HOSTS
     allowed = (
-        parts.scheme == "https"
-        and parts.hostname == ALLOWED_HOST
-        and port in (None, 443)
+        (production or loopback)
         and not parts.username
         and not parts.password
         and parts.path.rstrip("/") in ALLOWED_PATHS
@@ -47,9 +53,15 @@ def validate_mcp_url(url: str) -> str:
     if not allowed:
         raise McpError(
             "invalid_mcp_url",
-            "mcp_url must be https://equitylayer.io/mcp or https://equitylayer.io/mcp/full.",
+            "mcp_url must be https://equitylayer.io/mcp, or http://localhost:<port>/mcp for development.",
         )
     return url.rstrip("/")
+
+
+def full_route(url: str) -> str:
+    """The same server's /mcp/full route, which carries get_variable."""
+    base = validate_mcp_url(url)
+    return base if base.endswith("/mcp/full") else base + "/full"
 
 
 def parse_rpc_response(content_type: str, body: str, request_id: int) -> dict:
@@ -121,7 +133,11 @@ def _payload_error(payload: dict, is_error: bool) -> McpError | None:
         details = {k: v for k, v in payload.items() if k != "error"}
         return McpError(str(error), str(payload.get("message") or ""), details=details or None)
     if is_error or payload.get("ok") is False:
-        return McpError("upstream_error", str(payload.get("text") or payload.get("message") or ""))
+        text = str(payload.get("text") or payload.get("message") or "")
+        # Schema failures come back as text; they mean the arguments, not the server, are wrong.
+        if text.startswith("Input validation error"):
+            return McpError("invalid_arguments", text.split(": ", 2)[-1] if ": " in text else text)
+        return McpError("upstream_error", text)
     # A challenge body without an error field still must not read as research.
     if any(key in payload for key in ("x402", "payment_required", "payment_challenge")):
         return McpError("payment_required", "The server asked for payment.")

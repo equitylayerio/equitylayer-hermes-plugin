@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"Input validation error: Invalid arguments for tool check_thesis_harness: harness.why: Invalid input: expected string, received undefined"}],"isError":true},"jsonrpc":"2.0","id":1}
+

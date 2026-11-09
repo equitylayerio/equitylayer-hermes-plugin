@@ -6,20 +6,19 @@ import functools
 import json
 import logging
 from typing import Any, Callable
-from urllib.parse import urlsplit
 
 from . import formatters
+from .harness_store import HarnessStore, default_harness_store
+from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
 
 logger = logging.getLogger(__name__)
 
 PRICING_URL = "https://equitylayer.io/pricing"
-DEMO_ROUTE = "/mcp"
 # Substrings of upstream error codes that mean authentication, entitlement or payment.
 GATED_MARKERS = ("authentication", "authorization", "unauthorized", "entitle", "payment", "x402", "grant", "activation")
 HINTS = {
-    "baseline_missing": "Run el_test_thesis (/el test <view id>) first. It saves the baseline locally.",
     "unknown_research_pack": "Run el_list_registry (/el registry) for valid ids.",
     "research_pack_unavailable": (
         "This pack is not available on this route. It may be retired or gated. Pick a public entry "
@@ -27,6 +26,7 @@ HINTS = {
     ),
     "upstream_unavailable": "EquityLayer could not be reached. Local follows are unchanged. Try again later.",
     "invalid_mcp_url": "Set mcp_url to https://equitylayer.io/mcp in this plugin's settings.",
+    "invalid_arguments": "Fix the arguments named in the message and try again.",
 }
 
 
@@ -67,25 +67,24 @@ def _safe(method: Callable[..., dict]) -> Callable[..., str]:
     return handler
 
 
-class EquityLayerTools:
+class EquityLayerTools(HarnessTools):
     def __init__(
         self,
         get_config: Callable[..., Any] | None = None,
         in_cron: Callable[[], bool] | None = None,
         store_factory: Callable[[], FollowStore] = default_store,
         transport: Any = None,
+        harness_store_factory: Callable[[], HarnessStore] = default_harness_store,
     ):
         self._get_config = get_config or (lambda key, default=None: default)
         self._in_cron = in_cron or (lambda: False)
         self._store_factory = store_factory
         self._transport = transport
+        self._harness_store_factory = harness_store_factory
+        self._plan_ids = None
         self._locked_ids: set[str] = set()
 
     # -- shared plumbing ---------------------------------------------------------------------------
-
-    @property
-    def demo_mode(self) -> bool:
-        return _as_bool(self._get_config("demo_mode", default=True), True)
 
     def run(self, method: Callable[..., dict], args: dict | None) -> dict:
         """Run a tool body and turn every failure into a structured error."""
@@ -94,6 +93,9 @@ class EquityLayerTools:
             return method(self, safe_args)
         except McpError as exc:
             return self._error(exc, safe_args)
+        except ValueError as exc:
+            # Raised for an id that cannot be a local file name.
+            return {"ok": False, "error": "invalid_argument", "message": str(exc)}
         except OSError as exc:
             logger.warning("EquityLayer local storage error: %s", exc)
             return {"ok": False, "error": "local_storage_error", "message": str(exc)}
@@ -113,46 +115,24 @@ class EquityLayerTools:
         return result
 
     def _gated(self, upstream: str, target: dict) -> dict:
-        hint = (
-            "Disable demo_mode and complete EquityLayer agent activation / payment only with user consent."
-            if self.demo_mode
-            else "This plugin version holds no credential and never pays. Use a public registry entry."
-        )
         return {
             "ok": False,
             "error": "entitlement_or_payment_required",
-            "demo_mode": self.demo_mode,
             "upstream_error": upstream,
-            "hint": hint,
+            "hint": "This plugin holds no credential and never pays. Use public research or your own thesis harness.",
             "pricing_url": PRICING_URL,
             **target,
         }
 
     def _call(self, tool: str, arguments: dict) -> dict:
         url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL)
-        client = McpClient(url, transport=self._transport)
-        if self.demo_mode and urlsplit(client.url).path != DEMO_ROUTE:
-            raise McpError(
-                "demo_mode_requires_product_route",
-                "Demo mode only uses https://equitylayer.io/mcp. Change mcp_url or turn demo mode off.",
-            )
-        return client.call_tool(tool, arguments)
+        return McpClient(url, transport=self._transport).call_tool(tool, arguments)
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:
         """Skip the network for an entry the registry already showed as non-public."""
-        if self.demo_mode and entry_id in self._locked_ids:
+        if entry_id in self._locked_ids:
             return self._gated("registry_access_not_public", target)
         return None
-
-    def _refuse_private(self, field: str) -> dict | None:
-        if not self.demo_mode:
-            return None
-        return {
-            "ok": False,
-            "error": "private_research_disabled_in_demo_mode",
-            "demo_mode": True,
-            "message": f"Demo mode uses public research only, so {field} was not sent to EquityLayer.",
-        }
 
     # -- registry and research ---------------------------------------------------------------------
 
@@ -163,11 +143,17 @@ class EquityLayerTools:
         self._locked_ids = {e["id"] for e in entries if e["locked"]}
         return {
             "ok": True,
-            "demo_mode": self.demo_mode,
             "count": len(entries),
             "registry_url": payload.get("registry_url"),
+            "availability_note": payload.get("availability_note"),
+            "current_product_industries": payload.get("current_product_industries"),
             "entries": entries,
-            "markdown": formatters.format_registry(entries, payload.get("registry_url")),
+            "markdown": formatters.format_registry(
+                entries,
+                payload.get("registry_url"),
+                note=payload.get("availability_note"),
+                industries=payload.get("current_product_industries"),
+            ),
         }
 
     def _compact_entry(self, entry: dict) -> dict:
@@ -181,7 +167,7 @@ class EquityLayerTools:
             "publisher": (entry.get("publisher") or {}).get("name") if isinstance(entry.get("publisher"), dict) else None,
             "status": entry.get("status"),
             "access": access,
-            "locked": self.demo_mode and access != "public",
+            "locked": access != "public",
             "edition": entry.get("edition"),
             "coverage": entry.get("coverage"),
             "freshness": freshness.get("freshness"),
@@ -238,71 +224,13 @@ class EquityLayerTools:
             "markdown": formatters.format_scorecard(data),
         }
 
-    def _test_thesis(self, args: dict) -> dict:
-        thesis_id = _text_arg(args, "thesis_id")
-        if not thesis_id and not args.get("thesis"):
-            return _missing("thesis_id", "thesis")
-        if args.get("thesis"):
-            refused = self._refuse_private("thesis")
-            if refused:
-                return refused
-        arguments = {k: args[k] for k in ("thesis_id", "thesis", "last_pack_versions") if args.get(k)}
-        data = self._call("test_thesis", arguments)
-        pack_versions = [
-            {"pack_id": p.get("pack_id"), "version": p.get("version")}
-            for p in (data.get("evidence_boundary") or {}).get("pack_versions") or []
-            if isinstance(p, dict)
-        ]
-        # Only public results get a saved baseline. Private thesis input is never written to disk.
-        if thesis_id and not args.get("thesis") and pack_versions:
-            self._store_factory().save_baseline(thesis_id, pack_versions)
-        if args.get("format") == "json":
-            return {"ok": True, "thesis_id": thesis_id, "result": data}
-        return {
-            "ok": True,
-            "thesis_id": thesis_id or None,
-            "overall_thesis_effect": data.get("overall_thesis_effect"),
-            "as_of": data.get("as_of"),
-            "fresh_until": data.get("fresh_until"),
-            "pack_versions": pack_versions,
-            "markdown": formatters.format_thesis_test(data),
-        }
-
-    def _thesis_update(self, args: dict) -> dict:
-        thesis_id = _text_arg(args, "thesis_id")
-        if not thesis_id and not args.get("portable_research_card"):
-            return _missing("thesis_id", "portable_research_card")
-        if args.get("portable_research_card"):
-            refused = self._refuse_private("portable_research_card")
-            if refused:
-                return refused
-        keys = ("thesis_id", "since_thesis_version", "since_pack_versions", "portable_research_card")
-        arguments = {k: args[k] for k in keys if args.get(k)}
-        if thesis_id and "since_pack_versions" not in arguments:
-            baseline = self._store_factory().get_baseline(thesis_id)
-            if baseline:
-                arguments["since_pack_versions"] = baseline
-        data = self._call("get_thesis_update", arguments)
-        if args.get("format") == "json":
-            return {"ok": True, "thesis_id": thesis_id, "result": data}
-        return {
-            "ok": True,
-            "thesis_id": thesis_id or None,
-            "status": data.get("status"),
-            "reason": data.get("reason"),
-            "billable": data.get("billable"),
-            "as_of": data.get("as_of"),
-            "fresh_until": data.get("fresh_until"),
-            "markdown": formatters.format_thesis_update(data),
-        }
-
     # -- follows -----------------------------------------------------------------------------------
 
     def _schedule_hint(self, record: dict | None = None) -> str:
         when = f" after {record['next_check_at']}" if record and record.get("next_check_at") else ""
         follow_id = record.get("follow_id") if record else "<follow_id>"
         return (
-            f"Run `/el check {follow_id}`{when}, or schedule checks for every due follow with "
+            f"Run `/el follow-check {follow_id}`{when}, or schedule checks for every due follow with "
             "`/blueprint equitylayer:follow-check`."
         )
 
@@ -528,8 +456,13 @@ class EquityLayerTools:
     el_list_registry = _safe(_registry)
     el_get_pack = _safe(_pack)
     el_scorecard = _safe(_scorecard)
-    el_test_thesis = _safe(_test_thesis)
-    el_thesis_update = _safe(_thesis_update)
     el_follow_create = _safe(_follow_create)
     el_follow_check = _safe(_follow_check)
     el_follow_list = _safe(_follow_list)
+
+    el_plan_thesis = _safe(HarnessTools._plan)
+    el_get_variable = _safe(HarnessTools._variable)
+    el_harness_save = _safe(HarnessTools._harness_save)
+    el_harness_check = _safe(HarnessTools._harness_check)
+    el_harness_seen = _safe(HarnessTools._harness_seen)
+    el_harness_list = _safe(HarnessTools._harness_list)

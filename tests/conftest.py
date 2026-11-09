@@ -22,17 +22,21 @@ if PACKAGE not in sys.modules:
 
 
 class FakeMcp(httpx.MockTransport):
-    """Replays recorded SSE by tool name and records every call."""
+    """Replays recorded SSE by tool name and records every call (with the route path)."""
 
     def __init__(self, routes: dict):
         self.routes = routes
         self.calls: list = []
+        self.paths: list = []
         super().__init__(self._handle)
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         params = json.loads(request.content)["params"]
         self.calls.append((params["name"], params["arguments"]))
+        self.paths.append(request.url.path)
         route = self.routes[params["name"]]
+        if isinstance(route, list):
+            route = route.pop(0)
         if isinstance(route, int):
             return httpx.Response(route)
         return httpx.Response(200, headers={"content-type": "text/event-stream"}, text=fixture_text(route))
@@ -44,9 +48,11 @@ class FakeMcp(httpx.MockTransport):
 @pytest.fixture
 def make_service(tmp_path):
     from equitylayer_plugin.follows import FollowStore
+    from equitylayer_plugin.harness_store import HarnessStore
     from equitylayer_plugin.tools import EquityLayerTools
 
     store = FollowStore(tmp_path)
+    harnesses = HarnessStore(tmp_path)
 
     def build(routes=None, config=None, in_cron=False):
         settings = config or {}
@@ -55,6 +61,7 @@ def make_service(tmp_path):
             get_config=lambda key, default=None: settings.get(key, default),
             in_cron=lambda: in_cron,
             store_factory=lambda: store,
+            harness_store_factory=lambda: harnesses,
             transport=transport,
         )
         return service, transport, store

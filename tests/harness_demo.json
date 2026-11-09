@@ -1,0 +1,99 @@
+{
+ "harness": {
+  "title": "CPO reaches volume by end-2027",
+  "hypothesis": "Co-packaged optics reaches volume shipments in AI switches by the end of 2027, and optical component suppliers show it in revenue before switch makers do.",
+  "why": "CPO moves the optical engine next to the switch ASIC. Fiber attach, laser and module suppliers have to build capacity and ship parts quarters before finished switches ship, so their revenue should lead.",
+  "tracking": [
+   {
+    "id": "foci-ramp",
+    "must_hold": "FOCI (3363) monthly revenue holds at or above its September 2026 level while fiber-attach work ramps.",
+    "variables": [
+     "v:3363.two.revenue.monthly"
+    ],
+    "runner": "rules",
+    "expected_by": "2026-12-31",
+    "if_late": "The fiber-attach ramp is slower than I assumed.",
+    "if_against": "Fiber-attach demand is not lifting FOCI's total revenue yet.",
+    "rules": [
+     {
+      "variable": "v:3363.two.revenue.monthly",
+      "if": ">= 220000",
+      "means": "strengthens",
+      "say": "At or above the September 2026 level (my judgment)."
+     },
+     {
+      "variable": "v:3363.two.revenue.monthly",
+      "if": "< 200000",
+      "means": "weakens",
+      "say": "Below the August 2026 level (my judgment)."
+     },
+     {
+      "variable": "v:3363.two.revenue.monthly",
+      "if": "200000..220000",
+      "means": "no_material_change",
+      "say": "Between August and September levels (my judgment)."
+     }
+    ]
+   },
+   {
+    "id": "coherent-dc",
+    "must_hold": "Coherent's Datacenter & Communications segment keeps growing quarter on quarter.",
+    "variables": [
+     "v:cohr.us.data_center_communications_revenue.quarterly"
+    ],
+    "runner": "rules",
+    "expected_by": "2027-02-28",
+    "if_late": "No new quarter to read; check the filing date.",
+    "if_against": "Optical demand at the module layer is slowing.",
+    "rules": [
+     {
+      "variable": "v:cohr.us.data_center_communications_revenue.quarterly",
+      "if": ">= 1900",
+      "means": "strengthens",
+      "say": "At or above FY2027-Q1 level of about USD 1.95bn (my judgment)."
+     },
+     {
+      "variable": "v:cohr.us.data_center_communications_revenue.quarterly",
+      "if": "< 1600",
+      "means": "weakens",
+      "say": "Back below the FY2026-Q4 level (my judgment)."
+     },
+     {
+      "variable": "v:cohr.us.data_center_communications_revenue.quarterly",
+      "if": "1600..1900",
+      "means": "no_material_change",
+      "say": "Between FY2026-Q4 and FY2027-Q1 levels (my judgment)."
+     }
+    ]
+   },
+   {
+    "id": "lumentum-cpo",
+    "must_hold": "Lumentum describes CPO in scale-up as shipping, not sampling.",
+    "variables": [
+     "v:lite.us.npo_cpo_statement.quarterly"
+    ],
+    "runner": "llm_draft",
+    "expected_note": "Next quarterly results call.",
+    "if_against": "CPO is still a sampling story at the laser layer.",
+    "if_late": "Still no shipping language after the next call."
+   }
+  ],
+  "wrong_if": [
+   {
+    "id": "foci-three-down",
+    "label": "FOCI monthly revenue below 200,000 thousand TWD for three months in a row.",
+    "type": "consecutive",
+    "variable": "v:3363.two.revenue.monthly",
+    "if": "< 200000",
+    "count": 3
+   },
+   {
+    "id": "hyperscaler-pluggable",
+    "label": "A hyperscaler says its next switch generation stays on pluggable optics.",
+    "type": "human",
+    "check_by": "2027-06-30"
+   }
+  ],
+  "differs_from": "The common reading is that switch makers capture CPO first."
+ }
+}

@@ -1,4 +1,4 @@
-"""EquityLayer research for Hermes Agent."""
+"""EquityLayer for Hermes Agent: track your own investment thesis against EquityLayer's variable catalog."""
 
 from __future__ import annotations
 
@@ -17,11 +17,17 @@ def register(ctx) -> None:
         in_cron=lambda: ctx.current_cron_execution() is not None,
     )
     for schema, handler in (
+        # Your own thesis (primary)
+        (schemas.EL_PLAN_THESIS, service.el_plan_thesis),
+        (schemas.EL_GET_VARIABLE, service.el_get_variable),
+        (schemas.EL_HARNESS_SAVE, service.el_harness_save),
+        (schemas.EL_HARNESS_CHECK, service.el_harness_check),
+        (schemas.EL_HARNESS_SEEN, service.el_harness_seen),
+        (schemas.EL_HARNESS_LIST, service.el_harness_list),
+        # Published research (secondary)
         (schemas.EL_LIST_REGISTRY, service.el_list_registry),
         (schemas.EL_GET_PACK, service.el_get_pack),
         (schemas.EL_SCORECARD, service.el_scorecard),
-        (schemas.EL_TEST_THESIS, service.el_test_thesis),
-        (schemas.EL_THESIS_UPDATE, service.el_thesis_update),
         (schemas.EL_FOLLOW_CREATE, service.el_follow_create),
         (schemas.EL_FOLLOW_CHECK, service.el_follow_check),
         (schemas.EL_FOLLOW_LIST, service.el_follow_list),
@@ -31,8 +37,8 @@ def register(ctx) -> None:
     ctx.register_command(
         "el",
         handler=commands.make_slash_handler(service),
-        description="EquityLayer research: registry, packs, scorecards and local follows",
-        args_hint="<registry|pack|scorecard|test|update|follow|follows|check|unfollow|schedule>",
+        description="EquityLayer: track your own thesis (plan, check, seen) and published research",
+        args_hint="<plan|var|theses|show|check|seen|remove|schedule|registry|pack|follow|follows>",
     )
     ctx.register_cli_command(
         name="equitylayer",
@@ -45,4 +51,4 @@ def register(ctx) -> None:
         if (child / "SKILL.md").exists():
             ctx.register_skill(child.name, child / "SKILL.md")
 
-    commands.register_blueprint(ctx)
+    commands.register_blueprints(ctx)

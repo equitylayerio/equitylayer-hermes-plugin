@@ -55,12 +55,18 @@ def test_other_surfaces_are_registered():
     ctx = _registered()
     assert ctx.commands == ["el"]
     assert ctx.cli == ["equitylayer"]
-    assert ctx.skills == ["equitylayer-research"]
-    assert ctx.blueprints == ["follow-check"]
+    assert ctx.skills == ["equitylayer-research", "equitylayer-thesis-harness"]
+    assert ctx.blueprints == ["thesis-check", "follow-check"]
 
 
 def test_manifest_defaults_and_no_required_env():
     manifest = _manifest()
     assert "requires_env" not in manifest
     assert manifest["config_schema"]["mcp_url"]["default"] == "https://equitylayer.io/mcp"
-    assert manifest["config_schema"]["demo_mode"]["default"] is True
+    assert set(manifest["config_schema"]) == {"mcp_url"}
+
+
+def test_skills_never_tell_the_model_to_trade():
+    for path in (ROOT / "skills").glob("*/SKILL.md"):
+        text = path.read_text(encoding="utf-8")
+        assert "Never say what to buy, sell, size or time" in text, path

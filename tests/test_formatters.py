@@ -46,12 +46,6 @@ def test_scorecard_is_a_short_card_with_resolution_counts():
     assert "Cite as: EquityLayer Research." in text
 
 
-def test_thesis_test_keeps_limits_and_effect():
-    text = formatters.format_thesis_test(payload("test_thesis"))
-    assert "insufficient_evidence" in text
-    assert "This result covers three Taiwan issuers only." in text
-
-
 def test_table_cells_cannot_break_out_of_a_row():
     assert formatters._cell("a|b\nc") == "a\\|b c"
     assert formatters._cell(None) == "—"
