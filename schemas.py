@@ -133,8 +133,9 @@ EL_PLAN_THESIS = {
     "description": (
         "Step 1 for the user's OWN investment thesis. Sends the thesis text to EquityLayer, which stores nothing, "
         "and returns candidate variables from a fixed catalog with cadence, latest period, caveats and coverage "
-        "gaps. Choose variables only from these candidates, read every caveat, and tell the user about gaps. "
-        "Selecting variables takes care: do it with the user. " + _NOT_ADVICE
+        "gaps. Show the markdown, tell the user about caveats and gaps, then STOP and ask which variables, "
+        "thresholds and wrong_if conditions they want. Do not draft-save or check a harness in the same turn. "
+        "Choose only ids from these candidates. " + _NOT_ADVICE
     ),
     "parameters": {
         "type": "object",
@@ -174,7 +175,8 @@ EL_HARNESS_SAVE = {
         "[{variable, if: '>= N' | '< N' | 'a..b', means: strengthens|weakens|no_material_change|"
         "insufficient_evidence, say}]) and wrong_if (consecutive | average | below_baseline_count | human). "
         "Rule variables must be in that link's variables; thresholds are the user's judgment, say so in `say`. "
-        "EquityLayer validates it before it is stored. Pass harness_id to update a saved harness."
+        "EquityLayer validates it before it is stored. Call this only after the user has confirmed the variables, "
+        "thresholds and wrong_if in this conversation; never on your own initiative. Pass harness_id to update."
     ),
     "parameters": {
         "type": "object",

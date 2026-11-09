@@ -19,7 +19,9 @@ with the user's own thesis. Never present a retired pack as current.
 2. Show the `markdown`. Choose **only** ids listed in `candidates`. Never write an id that is not listed.
 3. Read every caveat aloud to the user. A caveat says what a variable cannot show. Avoid an `aggregate` unless the thesis is about the total.
 4. Tell the user about `gaps` and unmatched terms. Do not stretch a variable to fit: leave the link's `variables` empty and fill `variable_gap`.
-5. Call `el_get_variable` on each chosen id to see its unit and recent levels. A withheld value is null with a reason: it is no data, never a guess.
+5. **Stop and ask.** Show the candidates and ask the user which variables they want, what levels would count, and what
+   would make them admit the thesis is wrong. Do not save or check anything until they answer.
+6. Call `el_get_variable` on each chosen id to see its unit and recent levels. A withheld value is null with a reason: it is no data, never a guess.
 
 ## 3. Write the four parts
 
@@ -38,7 +40,7 @@ Optional: `title`, `differs_from`, `do_not_track`, `exposure` (companies and ope
 
 ## 4. Save and check
 
-1. `el_harness_save` with the harness. EquityLayer validates it first; fix any `problems` it returns and save again.
+1. Show the user the four parts you drafted and get their OK. Then call `el_harness_save` with the harness. EquityLayer validates it first; fix any `problems` it returns and save again.
    Pass `harness_id` to update a saved harness. Moving an `expected_by` needs an `expected_history` entry with the old date and the reason.
 2. `el_harness_check` with `harness_id`. Show the `markdown` as returned: statuses, wrong_if results, what changed, caveats, sources.
 3. `no_data` is not good news. It says what could not be compared.
