@@ -67,9 +67,9 @@ def _watch_card(record: dict) -> str:
             f'<tr><td>{new}{_e(r.get("name"))}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
             f'<td class="num">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
             f'<td class="num">{_e(r.get("change"))}</td><td>{_spark(r.get("recent") or [])}</td>'
-            f'<td class="muted">{_e(r.get("next_reading"))}</td></tr>')
-    table = ('<table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
-             f'<tbody>{"".join(rows)}</tbody></table>')
+            f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
+    table = ('<div class="tbl"><table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
+             f'<tbody>{"".join(rows)}</tbody></table></div>')
     return (f'<section class="card">{head}<p class="muted">Checked {_e(last.get("as_of"))} · '
             f'{_e(last.get("new_count", 0))} new · next check {_e(last.get("next_due"))}</p>{table}</section>')
 
@@ -176,7 +176,7 @@ th{{font-size:12px;color:var(--muted);font-weight:600}}.num{{white-space:nowrap}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}}
 .s-seen{{color:var(--seen)}}.s-against{{color:var(--against)}}.s-late{{color:var(--late)}}.s-no_data,.s-not_due{{color:var(--nodata)}}
 .alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
-@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}}}
+.tbl{{overflow-x:auto}}@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}td:first-child{{min-width:9em}}}}
 </style></head><body><main>
 {"".join(body)}
 </main></body></html>
