@@ -1,0 +1,535 @@
+"""Hermes tool handlers: EquityLayer MCP calls plus local Follow Card state."""
+
+from __future__ import annotations
+
+import functools
+import json
+import logging
+from typing import Any, Callable
+from urllib.parse import urlsplit
+
+from . import formatters
+from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
+from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
+
+logger = logging.getLogger(__name__)
+
+PRICING_URL = "https://equitylayer.io/pricing"
+DEMO_ROUTE = "/mcp"
+# Substrings of upstream error codes that mean authentication, entitlement or payment.
+GATED_MARKERS = ("authentication", "authorization", "unauthorized", "entitle", "payment", "x402", "grant", "activation")
+HINTS = {
+    "baseline_missing": "Run el_test_thesis (/el test <view id>) first. It saves the baseline locally.",
+    "unknown_research_pack": "Run el_list_registry (/el registry) for valid ids.",
+    "research_pack_unavailable": (
+        "This pack is not available on this route. It may be retired or gated. Pick a public entry "
+        "from el_list_registry (/el registry)."
+    ),
+    "upstream_unavailable": "EquityLayer could not be reached. Local follows are unchanged. Try again later.",
+    "invalid_mcp_url": "Set mcp_url to https://equitylayer.io/mcp in this plugin's settings.",
+}
+
+
+def is_gated(code: str) -> bool:
+    lowered = code.lower()
+    return any(marker in lowered for marker in GATED_MARKERS)
+
+
+def _as_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
+
+
+def _text_arg(args: dict, name: str) -> str:
+    value = args.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _missing(*names: str) -> dict:
+    return {
+        "ok": False,
+        "error": "missing_argument",
+        "argument": " or ".join(names),
+        "message": f"Provide {' or '.join(names)}.",
+    }
+
+
+def _safe(method: Callable[..., dict]) -> Callable[..., str]:
+    """Hermes handlers return a JSON string and must never raise."""
+
+    @functools.wraps(method)
+    def handler(self: "EquityLayerTools", args: dict | None = None, **kwargs: Any) -> str:
+        return json.dumps(self.run(method, args), ensure_ascii=False)
+
+    return handler
+
+
+class EquityLayerTools:
+    def __init__(
+        self,
+        get_config: Callable[..., Any] | None = None,
+        in_cron: Callable[[], bool] | None = None,
+        store_factory: Callable[[], FollowStore] = default_store,
+        transport: Any = None,
+    ):
+        self._get_config = get_config or (lambda key, default=None: default)
+        self._in_cron = in_cron or (lambda: False)
+        self._store_factory = store_factory
+        self._transport = transport
+        self._locked_ids: set[str] = set()
+
+    # -- shared plumbing ---------------------------------------------------------------------------
+
+    @property
+    def demo_mode(self) -> bool:
+        return _as_bool(self._get_config("demo_mode", default=True), True)
+
+    def run(self, method: Callable[..., dict], args: dict | None) -> dict:
+        """Run a tool body and turn every failure into a structured error."""
+        safe_args = args if isinstance(args, dict) else {}
+        try:
+            return method(self, safe_args)
+        except McpError as exc:
+            return self._error(exc, safe_args)
+        except OSError as exc:
+            logger.warning("EquityLayer local storage error: %s", exc)
+            return {"ok": False, "error": "local_storage_error", "message": str(exc)}
+        except Exception as exc:  # noqa: BLE001 - a tool must report, not crash the agent turn
+            logger.exception("EquityLayer tool failed")
+            return {"ok": False, "error": "internal_error", "message": f"{type(exc).__name__}: {exc}"}
+
+    def _error(self, exc: McpError, args: dict) -> dict:
+        target = {k: args[k] for k in ("pack_id", "thesis_id", "id") if isinstance(args.get(k), str)}
+        if is_gated(exc.code):
+            return self._gated(exc.code, target)
+        result = {"ok": False, "error": exc.code, "message": exc.message, **target}
+        if exc.details:
+            result["details"] = exc.details
+        if exc.code in HINTS:
+            result["hint"] = HINTS[exc.code]
+        return result
+
+    def _gated(self, upstream: str, target: dict) -> dict:
+        hint = (
+            "Disable demo_mode and complete EquityLayer agent activation / payment only with user consent."
+            if self.demo_mode
+            else "This plugin version holds no credential and never pays. Use a public registry entry."
+        )
+        return {
+            "ok": False,
+            "error": "entitlement_or_payment_required",
+            "demo_mode": self.demo_mode,
+            "upstream_error": upstream,
+            "hint": hint,
+            "pricing_url": PRICING_URL,
+            **target,
+        }
+
+    def _call(self, tool: str, arguments: dict) -> dict:
+        url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL)
+        client = McpClient(url, transport=self._transport)
+        if self.demo_mode and urlsplit(client.url).path != DEMO_ROUTE:
+            raise McpError(
+                "demo_mode_requires_product_route",
+                "Demo mode only uses https://equitylayer.io/mcp. Change mcp_url or turn demo mode off.",
+            )
+        return client.call_tool(tool, arguments)
+
+    def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:
+        """Skip the network for an entry the registry already showed as non-public."""
+        if self.demo_mode and entry_id in self._locked_ids:
+            return self._gated("registry_access_not_public", target)
+        return None
+
+    def _refuse_private(self, field: str) -> dict | None:
+        if not self.demo_mode:
+            return None
+        return {
+            "ok": False,
+            "error": "private_research_disabled_in_demo_mode",
+            "demo_mode": True,
+            "message": f"Demo mode uses public research only, so {field} was not sent to EquityLayer.",
+        }
+
+    # -- registry and research ---------------------------------------------------------------------
+
+    def _registry(self, args: dict) -> dict:
+        arguments = {"publisher": args["publisher"]} if _text_arg(args, "publisher") else {}
+        payload = self._call("list_registry", arguments)
+        entries = [self._compact_entry(e) for e in payload.get("entries") or [] if isinstance(e, dict)]
+        self._locked_ids = {e["id"] for e in entries if e["locked"]}
+        return {
+            "ok": True,
+            "demo_mode": self.demo_mode,
+            "count": len(entries),
+            "registry_url": payload.get("registry_url"),
+            "entries": entries,
+            "markdown": formatters.format_registry(entries, payload.get("registry_url")),
+        }
+
+    def _compact_entry(self, entry: dict) -> dict:
+        freshness = entry.get("freshness") if isinstance(entry.get("freshness"), dict) else {}
+        access = entry.get("access")
+        cite = entry.get("cite_as") if isinstance(entry.get("cite_as"), dict) else {}
+        return {
+            "id": entry.get("id"),
+            "kind": entry.get("kind"),
+            "title": entry.get("title"),
+            "publisher": (entry.get("publisher") or {}).get("name") if isinstance(entry.get("publisher"), dict) else None,
+            "status": entry.get("status"),
+            "access": access,
+            "locked": self.demo_mode and access != "public",
+            "edition": entry.get("edition"),
+            "coverage": entry.get("coverage"),
+            "freshness": freshness.get("freshness"),
+            "fresh_until": freshness.get("fresh_until"),
+            "next_check_at": freshness.get("next_check_at"),
+            "read": entry.get("read"),
+            "follow": entry.get("follow"),
+            "cite_as": cite.get("text"),
+        }
+
+    def _pack(self, args: dict) -> dict:
+        pack_id = _text_arg(args, "pack_id")
+        if not pack_id:
+            return _missing("pack_id")
+        refused = self._refuse_locked(pack_id, {"pack_id": pack_id})
+        if refused:
+            return refused
+        arguments: dict = {"pack_id": pack_id}
+        if _text_arg(args, "version"):
+            arguments["version"] = args["version"]
+        if args.get("symbols"):
+            arguments["symbols"] = args["symbols"]
+        pack = self._call("get_research_pack", arguments)
+        if args.get("format") == "json":
+            return {"ok": True, "pack_id": pack_id, "pack": pack}
+        max_records = args.get("max_records")
+        max_records = max_records if isinstance(max_records, int) and 1 <= max_records <= 50 else 10
+        return {
+            "ok": True,
+            "pack_id": pack_id,
+            "version": pack.get("pack_version"),
+            "as_of": pack.get("as_of"),
+            "fresh_until": pack.get("fresh_until"),
+            "snapshot_hash": pack.get("snapshot_hash"),
+            "source_attribution": (pack.get("source") or {}).get("attribution") if isinstance(pack.get("source"), dict) else None,
+            "markdown": formatters.format_pack(pack, max_records),
+        }
+
+    def _scorecard(self, args: dict) -> dict:
+        entry_id = _text_arg(args, "id")
+        if not entry_id:
+            return _missing("id")
+        refused = self._refuse_locked(entry_id, {"id": entry_id})
+        if refused:
+            return refused
+        data = self._call("get_pack_scorecard", {"id": entry_id})
+        if args.get("format") == "json":
+            return {"ok": True, "id": entry_id, "scorecard": data}
+        return {
+            "ok": True,
+            "id": entry_id,
+            "scorecard": data.get("scorecard"),
+            "cite_as": (data.get("cite_as") or {}).get("text") if isinstance(data.get("cite_as"), dict) else None,
+            "markdown": formatters.format_scorecard(data),
+        }
+
+    def _test_thesis(self, args: dict) -> dict:
+        thesis_id = _text_arg(args, "thesis_id")
+        if not thesis_id and not args.get("thesis"):
+            return _missing("thesis_id", "thesis")
+        if args.get("thesis"):
+            refused = self._refuse_private("thesis")
+            if refused:
+                return refused
+        arguments = {k: args[k] for k in ("thesis_id", "thesis", "last_pack_versions") if args.get(k)}
+        data = self._call("test_thesis", arguments)
+        pack_versions = [
+            {"pack_id": p.get("pack_id"), "version": p.get("version")}
+            for p in (data.get("evidence_boundary") or {}).get("pack_versions") or []
+            if isinstance(p, dict)
+        ]
+        # Only public results get a saved baseline. Private thesis input is never written to disk.
+        if thesis_id and not args.get("thesis") and pack_versions:
+            self._store_factory().save_baseline(thesis_id, pack_versions)
+        if args.get("format") == "json":
+            return {"ok": True, "thesis_id": thesis_id, "result": data}
+        return {
+            "ok": True,
+            "thesis_id": thesis_id or None,
+            "overall_thesis_effect": data.get("overall_thesis_effect"),
+            "as_of": data.get("as_of"),
+            "fresh_until": data.get("fresh_until"),
+            "pack_versions": pack_versions,
+            "markdown": formatters.format_thesis_test(data),
+        }
+
+    def _thesis_update(self, args: dict) -> dict:
+        thesis_id = _text_arg(args, "thesis_id")
+        if not thesis_id and not args.get("portable_research_card"):
+            return _missing("thesis_id", "portable_research_card")
+        if args.get("portable_research_card"):
+            refused = self._refuse_private("portable_research_card")
+            if refused:
+                return refused
+        keys = ("thesis_id", "since_thesis_version", "since_pack_versions", "portable_research_card")
+        arguments = {k: args[k] for k in keys if args.get(k)}
+        if thesis_id and "since_pack_versions" not in arguments:
+            baseline = self._store_factory().get_baseline(thesis_id)
+            if baseline:
+                arguments["since_pack_versions"] = baseline
+        data = self._call("get_thesis_update", arguments)
+        if args.get("format") == "json":
+            return {"ok": True, "thesis_id": thesis_id, "result": data}
+        return {
+            "ok": True,
+            "thesis_id": thesis_id or None,
+            "status": data.get("status"),
+            "reason": data.get("reason"),
+            "billable": data.get("billable"),
+            "as_of": data.get("as_of"),
+            "fresh_until": data.get("fresh_until"),
+            "markdown": formatters.format_thesis_update(data),
+        }
+
+    # -- follows -----------------------------------------------------------------------------------
+
+    def _schedule_hint(self, record: dict | None = None) -> str:
+        when = f" after {record['next_check_at']}" if record and record.get("next_check_at") else ""
+        follow_id = record.get("follow_id") if record else "<follow_id>"
+        return (
+            f"Run `/el check {follow_id}`{when}, or schedule checks for every due follow with "
+            "`/blueprint equitylayer:follow-check`."
+        )
+
+    def _follow_create(self, args: dict) -> dict:
+        thesis_id, pack_id = _text_arg(args, "thesis_id"), _text_arg(args, "pack_id")
+        if bool(thesis_id) == bool(pack_id):
+            return {
+                "ok": False,
+                "error": "invalid_argument",
+                "message": "Provide exactly one of thesis_id or pack_id.",
+            }
+        kind, target = ("view", thesis_id) if thesis_id else ("pack", pack_id)
+        arguments = {"thesis_id": thesis_id} if thesis_id else {"pack_id": pack_id}
+        refused = self._refuse_locked(target, arguments)
+        if refused:
+            return refused
+        store = self._store_factory()
+        # Keep the original baseline: a fresh card would silently hide changes since it was created.
+        existing = store.find_target(kind, target)
+        if existing:
+            return self._follow_result(existing, already_following=True)
+        record = self._create_record(arguments)
+        path = store.save(record)
+        return self._follow_result(record, path=str(path))
+
+    def _create_record(self, arguments: dict) -> dict:
+        data = self._call("create_research_follow", arguments)
+        card = data.get("follow_card")
+        if not isinstance(card, dict):
+            raise McpError("invalid_mcp_response", "The server did not return a Follow Card.")
+        return build_record(card, data.get("caller_action"))
+
+    def _follow_result(self, record: dict, *, already_following: bool = False, path: str | None = None) -> dict:
+        hint = self._schedule_hint(record)
+        result = {
+            "ok": True,
+            "already_following": already_following,
+            "follow_id": record.get("follow_id"),
+            "target_kind": record.get("target_kind"),
+            "target_id": record.get("target_id"),
+            "next_check_at": record.get("next_check_at"),
+            "fresh_until": record.get("fresh_until"),
+            "schedule_hint": hint,
+            "markdown": formatters.format_follow_created(record, hint, already_following),
+        }
+        if path:
+            result["stored_at"] = path
+        return result
+
+    def _follow_check(self, args: dict) -> dict:
+        follow_id = _text_arg(args, "follow_id")
+        card = args.get("follow_card")
+        if args.get("accept_next"):
+            return self._accept_next(follow_id)
+        if isinstance(card, dict):
+            # A supplied card stays with the caller: nothing is written locally.
+            result = self._check_card(card)
+            return self._check_response([result], [], due_mode=False)
+        store = self._store_factory()
+        if follow_id:
+            record = store.get(follow_id)
+            if record is None:
+                return self._unknown_follow(follow_id)
+            return self._check_response([self._check_record(store, record)], [], due_mode=False)
+        records, _ = store.all()
+        # A card awaiting review is not re-sent, so a daily job does not repeat the same alert.
+        awaiting = [r for r in records if r.get("pending_review")]
+        due = [r for r in records if not r.get("pending_review") and is_due(r.get("next_check_at"))]
+        results = [self._check_record(store, r) for r in due]
+        return self._check_response(results, awaiting, due_mode=True)
+
+    def _unknown_follow(self, follow_id: str) -> dict:
+        return {
+            "ok": False,
+            "error": "unknown_follow",
+            "follow_id": follow_id,
+            "hint": "Run el_follow_list (/el follows) for local follow ids.",
+        }
+
+    def _check_card(self, card: dict) -> dict:
+        target = target_of(card)
+        base = {"follow_id": card.get("follow_id"), "target_id": target[1] if target else None}
+        try:
+            data = self._call("check_research_follow", {"follow_card": card})
+        except McpError as exc:
+            gated = is_gated(exc.code)
+            return {
+                **base,
+                "status": "error",
+                "error": "entitlement_or_payment_required" if gated else exc.code,
+                "message": PRICING_URL if gated else exc.message,
+                "needs_review": False,
+            }
+        action = data.get("caller_action") if isinstance(data.get("caller_action"), dict) else {}
+        status = str(data.get("status") or "unknown")
+        next_card = data.get("next_card") if isinstance(data.get("next_card"), dict) else None
+        return {
+            **base,
+            "status": status,
+            "needs_review": "review" in status or next_card is not None,
+            "message": action.get("message"),
+            "next_check_at": action.get("next_check_at"),
+            "variable_changes": data.get("variable_changes"),
+            "new_events": data.get("new_events"),
+            "new_version": action.get("new_version"),
+            "read": action.get("read"),
+            "next_card": next_card,
+            "_card": data.get("follow_card"),
+            "_action": action,
+        }
+
+    def _check_record(self, store: FollowStore, record: dict) -> dict:
+        result = self._check_card(record["follow_card"])
+        if result["status"] == "error":
+            return result
+        apply_caller_action(record, result.get("_action"))
+        if result["needs_review"]:
+            # The stored card stays as it is until the user accepts.
+            record["pending_review"] = {
+                k: result.get(k)
+                for k in ("status", "message", "new_version", "read", "next_card", "variable_changes", "new_events")
+            }
+        else:
+            if isinstance(result.get("_card"), dict):
+                record["follow_card"] = result["_card"]
+            record["pending_review"] = None
+        store.save(record)
+        return result
+
+    def _check_response(self, results: list[dict], awaiting: list[dict], due_mode: bool) -> dict:
+        public = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results]
+        return {
+            "ok": True,
+            "mode": "due" if due_mode else "single",
+            "checked": public,
+            "errors": sum(1 for r in public if r.get("status") == "error"),
+            "needs_review": sum(1 for r in public if r.get("needs_review")),
+            "awaiting_review": [
+                {"follow_id": r.get("follow_id"), "target_id": r.get("target_id")} for r in awaiting
+            ],
+            "markdown": formatters.format_check_run(public, awaiting, due_mode),
+        }
+
+    def _accept_next(self, follow_id: str) -> dict:
+        if self._in_cron():
+            return {
+                "ok": False,
+                "error": "accept_requires_user",
+                "message": "A person must review an update. Scheduled runs never accept it.",
+            }
+        if not follow_id:
+            return _missing("follow_id")
+        store = self._store_factory()
+        record = store.get(follow_id)
+        if record is None:
+            return self._unknown_follow(follow_id)
+        pending = record.get("pending_review")
+        if not pending:
+            return {
+                "ok": False,
+                "error": "nothing_to_accept",
+                "follow_id": follow_id,
+                "message": "This follow has no update awaiting review.",
+            }
+        if isinstance(pending.get("next_card"), dict):
+            new_record = build_record(pending["next_card"])
+        else:
+            # Pack cards name create_research_follow as the way to move to the new version.
+            key = "thesis_id" if record.get("target_kind") == "view" else "pack_id"
+            new_record = self._create_record({key: record.get("target_id")})
+        store.save(new_record)
+        if new_record.get("follow_id") != follow_id:
+            store.delete(follow_id)
+        return {
+            **self._follow_result(new_record),
+            "accepted": True,
+            "previous_follow_id": follow_id,
+            "markdown": (
+                f"**Accepted.** `{new_record.get('target_id')}` now follows from the new baseline as "
+                f"`{new_record.get('follow_id')}`. Next check: {new_record.get('next_check_at') or 'unknown'}."
+            ),
+        }
+
+    def _follow_list(self, args: dict) -> dict:
+        records, unreadable = self._store_factory().all()
+        rows = []
+        for record in records:
+            review = bool(record.get("pending_review"))
+            due = is_due(record.get("next_check_at"))
+            if args.get("due_only") and not (due or review):
+                continue
+            rows.append(
+                {
+                    "follow_id": record.get("follow_id"),
+                    "target_kind": record.get("target_kind"),
+                    "target_id": record.get("target_id"),
+                    "fresh_until": record.get("fresh_until"),
+                    "next_check_at": record.get("next_check_at"),
+                    "state": "needs review" if review else "due" if due else "waiting",
+                }
+            )
+        hint = self._schedule_hint()
+        return {
+            "ok": True,
+            "count": len(rows),
+            "follows": rows,
+            "unreadable": unreadable,
+            "schedule_hint": hint,
+            "markdown": formatters.format_follow_list(rows, unreadable, hint),
+        }
+
+    def _follow_remove(self, args: dict) -> dict:
+        """Stop following locally. Slash command only: the model has no delete tool."""
+        follow_id = _text_arg(args, "follow_id")
+        if not follow_id:
+            return _missing("follow_id")
+        if not self._store_factory().delete(follow_id):
+            return self._unknown_follow(follow_id)
+        return {"ok": True, "follow_id": follow_id, "markdown": f"Removed local follow `{follow_id}`."}
+
+    # -- Hermes tool handlers ----------------------------------------------------------------------
+
+    el_list_registry = _safe(_registry)
+    el_get_pack = _safe(_pack)
+    el_scorecard = _safe(_scorecard)
+    el_test_thesis = _safe(_test_thesis)
+    el_thesis_update = _safe(_thesis_update)
+    el_follow_create = _safe(_follow_create)
+    el_follow_check = _safe(_follow_check)
+    el_follow_list = _safe(_follow_list)

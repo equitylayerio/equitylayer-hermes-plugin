@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"{\"error\":\"research_pack_unavailable\"}"}],"structuredContent":{"error":"research_pack_unavailable"},"isError":true},"jsonrpc":"2.0","id":1}
+

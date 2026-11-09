@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"{\"ok\":false,\"error\":{\"code\":\"baseline_missing\",\"message\":\"A saved local Research Pack baseline is required. Run test_thesis first and save its Research Pack versions locally.\",\"details\":{\"required_pack_ids\":[\"tw-monthly-revenue\"]}}}"}],"structuredContent":{"ok":false,"error":{"code":"baseline_missing","message":"A saved local Research Pack baseline is required. Run test_thesis first and save its Research Pack versions locally.","details":{"required_pack_ids":["tw-monthly-revenue"]}}},"isError":true},"jsonrpc":"2.0","id":1}
+

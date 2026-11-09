@@ -1,0 +1,15 @@
+[project]
+name = "equitylayer-hermes-plugin"
+version = "0.1.0"
+description = "EquityLayer research for Hermes Agent"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "httpx>=0.27,<0.29",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib -m 'not network'"
+markers = ["network: calls the live EquityLayer MCP"]

@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"{\"error\":\"unknown_research_pack\",\"pack_id\":\"does-not-exist\",\"known_pack_ids\":[\"tw-monthly-revenue\"],\"next_tool\":\"list_registry\"}"}],"structuredContent":{"error":"unknown_research_pack","pack_id":"does-not-exist","known_pack_ids":["tw-monthly-revenue"],"next_tool":"list_registry"},"isError":true},"jsonrpc":"2.0","id":1}
+

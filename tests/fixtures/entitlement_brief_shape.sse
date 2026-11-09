@@ -1,0 +1,3 @@
+event: message
+data: {"result": {"content": [{"type": "text", "text": "{\"error\": \"agent_authentication_required\", \"pack_id\": \"ai-compute-pcb-ccl-value-capture\"}"}], "isError": true}, "jsonrpc": "2.0", "id": 1}
+
