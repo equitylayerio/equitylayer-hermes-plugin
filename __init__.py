@@ -47,6 +47,11 @@ def register(ctx) -> None:
         handler_fn=commands.run_cli,
     )
 
+    # Recall across chats: a pointer list rebuilt from the local harness files at each new session.
+    from .memory_section import MAX_CHARS, SECTION_ID, make_section
+
+    ctx.register_system_prompt_section(SECTION_ID, make_section(ctx.get_config), max_chars=MAX_CHARS)
+
     for child in sorted((Path(__file__).parent / "skills").iterdir()):
         if (child / "SKILL.md").exists():
             ctx.register_skill(child.name, child / "SKILL.md")

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class RecordingContext:
     def __init__(self):
         self.tools, self.commands, self.cli, self.skills, self.blueprints = [], [], [], [], []
+        self.sections = []
 
     def get_config(self, key, default=None):
         return default
@@ -36,6 +37,10 @@ class RecordingContext:
     def register_automation_blueprint(self, key, **kwargs):
         self.blueprints.append(key)
 
+    def register_system_prompt_section(self, id, content, *, position="after_memory", max_chars=4000):
+        assert callable(content) and position == "after_memory" and max_chars <= 4000
+        self.sections.append(id)
+
 
 def _registered():
     ctx = RecordingContext()
@@ -57,13 +62,15 @@ def test_other_surfaces_are_registered():
     assert ctx.cli == ["equitylayer"]
     assert ctx.skills == ["equitylayer-research", "equitylayer-thesis-harness"]
     assert ctx.blueprints == ["thesis-check", "follow-check"]
+    assert ctx.sections == ["equitylayer.tracked-theses"]
 
 
 def test_manifest_defaults_and_no_required_env():
     manifest = _manifest()
     assert "requires_env" not in manifest
     assert manifest["config_schema"]["mcp_url"]["default"] == "https://equitylayer.io/mcp"
-    assert set(manifest["config_schema"]) == {"mcp_url"}
+    assert set(manifest["config_schema"]) == {"mcp_url", "recall_in_new_chats"}
+    assert manifest["config_schema"]["recall_in_new_chats"]["default"] is True
 
 
 def test_skills_never_tell_the_model_to_trade():

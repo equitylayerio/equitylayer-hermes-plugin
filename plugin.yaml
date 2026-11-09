@@ -1,5 +1,5 @@
 name: equitylayer
-version: "0.2.0"
+version: "0.3.0"
 manifest_version: 2
 api_version: 1
 description: >
@@ -36,3 +36,8 @@ config_schema:
     default: "https://equitylayer.io/mcp"
     label: "EquityLayer MCP URL"
     description: "https://equitylayer.io/mcp (default). http://localhost:<port>/mcp is accepted for development. Other hosts are refused."
+  recall_in_new_chats:
+    type: bool
+    default: true
+    label: "Recall saved theses in new chats"
+    description: "At the start of each new chat, list your saved harnesses (id, title, last check date) in the system prompt, read from local files. Turn off to keep titles out of prompts sent to your model provider."
