@@ -56,6 +56,7 @@ def test_titles_are_one_line_and_bounded():
     hidden = int(re.search(r"… and (\d+) more", text).group(1))
     assert hidden >= 5 and text.count("\n- h") == MAX_LISTED + 5 - hidden
     assert text.endswith("never quote statuses or readings from it.")
+    assert "You may name these and their last check dates." in text
     assert "1 local file(s) could not be read" in text
 
 
