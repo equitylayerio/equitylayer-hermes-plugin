@@ -3,6 +3,7 @@ from pathlib import Path
 
 from equitylayer_plugin.harness_store import HarnessStore
 from equitylayer_plugin.profile_store import ProfileStore
+from equitylayer_plugin.watch_store import WatchStore
 from equitylayer_plugin.memory_section import EMPTY, MAX_CHARS, MAX_LISTED, SECTION_ID, START_HINT, make_section, render
 
 HARNESS = json.loads((Path(__file__).parent / "harness_demo.json").read_text())["harness"]
@@ -11,7 +12,7 @@ HARNESS = json.loads((Path(__file__).parent / "harness_demo.json").read_text())[
 def _section(tmp_path, config=None):
     settings = config or {}
     return make_section(lambda key, default=None: settings.get(key, default), lambda: HarnessStore(tmp_path),
-                        lambda: ProfileStore(tmp_path))
+                        lambda: ProfileStore(tmp_path), lambda: WatchStore(tmp_path))
 
 
 def test_lists_saved_harnesses_from_the_files(tmp_path):
@@ -104,7 +105,8 @@ def test_config_errors_render_nothing(tmp_path):
     def broken_config(key, default=None):
         raise RuntimeError("config unreadable")
 
-    assert make_section(broken_config, lambda: HarnessStore(tmp_path), lambda: ProfileStore(tmp_path))({}) == ""
+    assert make_section(broken_config, lambda: HarnessStore(tmp_path), lambda: ProfileStore(tmp_path),
+                        lambda: WatchStore(tmp_path))({}) == ""
 
 
 def test_falls_back_to_a_count_when_no_entry_fits(monkeypatch):
@@ -140,3 +142,9 @@ def test_profile_line_comes_before_the_harness_list(tmp_path):
     assert text.index("Research profile") < text.index("- cpo:")
     assert "checks only when asked" in text
     assert len(text) <= MAX_CHARS
+
+
+def test_watchlists_are_listed_as_pointers(tmp_path):
+    WatchStore(tmp_path).save("cpo-curated", "CPO curated readings", ["v:3363.two.revenue.monthly"], "optical_cpo")
+    text = _section(tmp_path)({})
+    assert '- watchlist cpo-curated: "CPO curated readings" (last check never checked; due; open with el_watch_list)' in text

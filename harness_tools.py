@@ -262,6 +262,7 @@ class HarnessTools:
             blocks.append("No harness is due." if not harness_id else "Nothing to check.")
         needs = sum(len(c.get("needs_human") or []) for c in checked if c.get("ok", True))
         moved = sum(c.get("variables_changed", 0) for c in checked if c.get("ok", True))
+        self._refresh_dashboard()
         return {
             "ok": True,
             "mode": "single" if harness_id else "due",
@@ -312,6 +313,7 @@ class HarnessTools:
             return {"ok": False, "error": "nothing_pending", "harness_id": harness_id,
                     "message": "There is no unread check for this harness."}
         taken = (record.get("baseline") or {}).get("taken_at")
+        self._refresh_dashboard()
         return {"ok": True, "harness_id": harness_id, "baseline_taken_at": taken,
                 "markdown": f"Marked as read. `{harness_id}` now compares against the check of {taken}."}
 
@@ -321,6 +323,7 @@ class HarnessTools:
         store: HarnessStore = self._harness_store_factory()
         if not harness_id or not store.delete(harness_id):
             return self._unknown_harness(harness_id)
+        self._refresh_dashboard()
         return {"ok": True, "harness_id": harness_id, "markdown": f"Removed `{harness_id}` from this machine."}
 
     @staticmethod

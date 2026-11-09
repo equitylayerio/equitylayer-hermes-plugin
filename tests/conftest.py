@@ -51,8 +51,10 @@ def make_service(tmp_path):
     from equitylayer_plugin.harness_store import HarnessStore
     from equitylayer_plugin.profile_store import ProfileStore
     from equitylayer_plugin.tools import EquityLayerTools
+    from equitylayer_plugin.watch_store import WatchStore
 
     store = FollowStore(tmp_path)
+    watches = WatchStore(tmp_path)
     harnesses = HarnessStore(tmp_path)
     profiles = ProfileStore(tmp_path)
 
@@ -65,6 +67,7 @@ def make_service(tmp_path):
             store_factory=lambda: store,
             harness_store_factory=lambda: harnesses,
             profile_store_factory=lambda: profiles,
+            watch_store_factory=lambda: watches,
             transport=transport,
         )
         return service, transport, store

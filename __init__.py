@@ -26,6 +26,12 @@ def register(ctx) -> None:
         (schemas.EL_HARNESS_LIST, service.el_harness_list),
         (schemas.EL_PROFILE_GET, service.el_profile_get),
         (schemas.EL_PROFILE_SAVE, service.el_profile_save),
+        # Follow curated readings without a thesis, and the local dashboard
+        (schemas.EL_WATCH_SAVE, service.el_watch_save),
+        (schemas.EL_WATCH_CHECK, service.el_watch_check),
+        (schemas.EL_WATCH_SEEN, service.el_watch_seen),
+        (schemas.EL_WATCH_LIST, service.el_watch_list),
+        (schemas.EL_DASHBOARD_RENDER, service.el_dashboard_render),
         # Published research (secondary)
         (schemas.EL_LIST_REGISTRY, service.el_list_registry),
         (schemas.EL_GET_PACK, service.el_get_pack),
@@ -40,7 +46,7 @@ def register(ctx) -> None:
         "el",
         handler=commands.make_slash_handler(service),
         description="EquityLayer: track your own thesis (plan, check, seen) and published research",
-        args_hint="<plan|var|theses|show|check|seen|remove|schedule|registry|pack|follow|follows>",
+        args_hint="<start|dashboard|watches|plan|var|theses|show|check|seen|remove|schedule|registry|pack|follow|follows>",
     )
     ctx.register_cli_command(
         name="equitylayer",

@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from .harness_store import HARNESS_ID_RE, HarnessStore, default_harness_store, is_due
 from .profile_store import ProfileStore, default_profile_store, describe
+from .watch_store import WatchStore, default_watch_store, is_watch_due
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,24 @@ def _state(record: dict) -> str:
     return "due" if is_due(record) else "waiting"
 
 
-def render(records: list[dict], unreadable: list[str] | None = None, profile: dict | None = None) -> str:
+def _watch_lines(watchlists: list[dict] | None) -> list[str]:
+    lines = []
+    for record in (watchlists or [])[:5]:
+        last = record.get("last_check") if isinstance(record.get("last_check"), dict) else {}
+        checked = _safe_date(last.get("as_of")) or "never checked"
+        state = "last check not yet read" if isinstance(record.get("pending"), dict) else (
+            "due" if is_watch_due(record) else "waiting")
+        lines.append(f"- watchlist {_safe_id(record.get('id'))}: \"{_one_line(record.get('title'))}\" "
+                     f"(last check {checked}; {state}; open with el_watch_list)")
+    return lines
+
+
+def render(records: list[dict], unreadable: list[str] | None = None, profile: dict | None = None,
+           watchlists: list[dict] | None = None) -> str:
     """Header and footer always fit; entries are dropped (and counted) rather than cut mid-line."""
     about = describe(profile)
     profile_line = [f"Research profile (from the user's setup answers): {about}."] if about else []
+    profile_line += _watch_lines(watchlists)
     if not records and not unreadable:
         return "\n".join([*profile_line, EMPTY, START_HINT])
     tail = []
@@ -93,6 +108,7 @@ def make_section(
     get_config: Callable[..., Any],
     store_factory: Callable[[], HarnessStore] = default_harness_store,
     profile_factory: Callable[[], ProfileStore] = default_profile_store,
+    watch_factory: Callable[[], WatchStore] = default_watch_store,
 ) -> Callable[[Any], str]:
     """The callable Hermes runs once per new session. It never raises."""
 
@@ -102,7 +118,8 @@ def make_section(
             if enabled is False or str(enabled).strip().lower() in ("false", "0", "no", "off"):
                 return ""
             records, unreadable = store_factory().all()
-            return render(records, unreadable, profile_factory().get())
+            watchlists, _ = watch_factory().all()
+            return render(records, unreadable, profile_factory().get(), watchlists)
         except Exception:  # noqa: BLE001 - a broken pointer list must never break prompt construction
             logger.warning("EquityLayer recall section skipped", exc_info=True)
             return ""

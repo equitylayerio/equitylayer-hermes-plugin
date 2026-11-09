@@ -41,7 +41,8 @@ CHECKS = ("daily", "weekly", "manual")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 TIMEZONE_RE = re.compile(r"^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+\-]+){1,2})$")
 LANGUAGE_RE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$")
-FIELDS = ("sectors", "has_view", "check", "check_time", "timezone", "language")
+PATHS = ("curated", "own_view", "formed_view")
+FIELDS = ("sectors", "path", "has_view", "check", "check_time", "timezone", "language")
 
 
 def default_profile_store() -> "ProfileStore":
@@ -66,6 +67,10 @@ def validate_fields(fields: dict) -> dict:
             if sector not in seen:
                 seen.append(sector)
         clean["sectors"] = seen
+    if "path" in fields:
+        if fields["path"] not in PATHS:
+            raise ValueError(f"path must be one of: {', '.join(PATHS)}")
+        clean["path"] = fields["path"]
     if "has_view" in fields:
         if not isinstance(fields["has_view"], bool):
             raise ValueError("has_view must be true or false")
@@ -137,6 +142,10 @@ def describe(profile: dict | None) -> str:
     parts = []
     if profile.get("sectors"):
         parts.append("researches " + ", ".join(SECTOR_LABELS[s] for s in profile["sectors"]))
+    if profile.get("path") == "curated":
+        parts.append("follows curated readings")
+    elif profile.get("path") in ("own_view", "formed_view"):
+        parts.append("tracks their own thesis")
     check = profile.get("check")
     if check == "manual":
         parts.append("checks only when asked")

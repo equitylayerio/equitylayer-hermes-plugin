@@ -254,11 +254,69 @@ EL_PROFILE_SAVE = {
             "sectors": {"type": "array", "items": {"type": "string", "enum": [
                 "optical_cpo", "space_infrastructure", "custom_asic", "physical_ai", "other"]},
                 "description": "Sectors the person chose, in their order."},
-            "has_view": {"type": "boolean", "description": "True if they came with a thesis, false if you helped form one."},
+            "path": {"type": "string", "enum": ["curated", "own_view", "formed_view"],
+                     "description": "How they follow the sector: curated readings, their own view, or a view formed with your questions."},
+            "has_view": {"type": "boolean", "description": "True if they came with a view of their own."},
             "check": {"type": "string", "enum": ["daily", "weekly", "manual"], "description": "How often to check."},
             "check_time": {"type": "string", "description": "HH:MM, 24-hour, for daily or weekly checks."},
             "timezone": {"type": "string", "description": "Area/City, for example Asia/Taipei."},
             "language": {"type": "string", "description": "Language tag the person writes in, for example en or zh-Hant."},
         },
     },
+}
+
+
+EL_WATCH_SAVE = {
+    "name": "el_watch_save",
+    "description": (
+        "Save a watchlist on this machine: 1 to 8 EquityLayer variable ids the person follows without a thesis "
+        "(the curated readings for a sector). Use only ids from el_plan_thesis candidates. Call it only after the "
+        "person says yes to the list. Pass watch_id to update an existing watchlist. Local only."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "Short title, for example \"CPO curated readings\"."},
+            "variables": {"type": "array", "items": {"type": "string"}, "description": "Variable ids, v:..."},
+            "theme": {"type": "string", "enum": ["optical_cpo", "space_infrastructure", "custom_asic", "physical_ai"]},
+            "watch_id": {"type": "string", "description": "Existing watchlist id to update."},
+        },
+        "required": ["title", "variables"],
+    },
+}
+
+EL_WATCH_CHECK = {
+    "name": "el_watch_check",
+    "description": (
+        "Check watchlists: latest readings, new periods since the person last read, recent official events "
+        "(exchange and issuer releases) and what is due next. With no watch_id it checks every watchlist that is "
+        "due or unread. Returns markdown to show as is, and report_total (0 means nothing new). It never marks a "
+        "check as read; the person does that with el_watch_seen. Also refreshes the local dashboard."
+    ),
+    "parameters": {"type": "object", "properties": {"watch_id": {"type": "string"}}},
+}
+
+EL_WATCH_SEEN = {
+    "name": "el_watch_seen",
+    "description": (
+        "Mark a watchlist's last check as read after the person says they have read it, so the next check reports "
+        "only what is new. Refused in scheduled runs."
+    ),
+    "parameters": {"type": "object", "properties": {"watch_id": {"type": "string"}}, "required": ["watch_id"]},
+}
+
+EL_WATCH_LIST = {
+    "name": "el_watch_list",
+    "description": "List the watchlists saved on this machine, or open one with its last check. Local only.",
+    "parameters": {"type": "object", "properties": {"watch_id": {"type": "string"}}},
+}
+
+EL_DASHBOARD_RENDER = {
+    "name": "el_dashboard_render",
+    "description": (
+        "Render the person's local EquityLayer dashboard (what they follow, their theses, what needs them, recent "
+        "events, what is due next) to an HTML file on this machine and return its path. Built from local files "
+        "only; contacts no one. Hermes Desktop lists it under Artifacts."
+    ),
+    "parameters": {"type": "object", "properties": {}},
 }

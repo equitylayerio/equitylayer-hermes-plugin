@@ -98,5 +98,7 @@ def test_start_skill_offers_the_websites_sectors_in_order():
     assert [s["id"] for s in SECTORS if s["recommended"]] == ["optical_cpo"]
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
     for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
-                   "el_profile_get", "el_profile_save", "Call `el_harness_save` only after a clear yes"):
+                   "el_profile_get", "el_profile_save", "Follow the curated readings (recommended)",
+                   "On yes, call `el_watch_save`", "On yes, call `el_harness_save`", "el_dashboard_render",
+                   "Before decision 2, show what is live"):
         assert phrase in text

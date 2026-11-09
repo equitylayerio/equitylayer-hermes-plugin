@@ -1,10 +1,11 @@
 name: equitylayer
-version: "0.3.1"
+version: "0.4.0"
 manifest_version: 2
 api_version: 1
 description: >
   Research CPO or space infrastructure with your own AI. Type /equitylayer:start and Hermes
-  guides you one question at a time: sector, your view, companies, variables, thresholds.
+  guides you in four decisions: sector, how to follow it (curated readings or your own
+  view), one card to approve, and how often to check. A local dashboard shows it all.
   EquityLayer's MCP maps your thesis to tracked variables with caveats and gaps; you
   write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
   harness and baseline on your machine and checks it on a schedule, reporting which
@@ -24,6 +25,11 @@ provides_tools:
   - el_harness_list
   - el_profile_get
   - el_profile_save
+  - el_watch_save
+  - el_watch_check
+  - el_watch_seen
+  - el_watch_list
+  - el_dashboard_render
   - el_list_registry
   - el_get_pack
   - el_scorecard

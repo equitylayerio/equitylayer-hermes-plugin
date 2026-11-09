@@ -12,11 +12,11 @@ RESEARCH_SKILL = "equitylayer:equitylayer-research"
 
 THESIS_CRON_NAME = "EquityLayer thesis check"
 THESIS_CRON_PROMPT = (
-    "Call el_harness_check with no arguments to check the user's saved EquityLayer thesis harnesses that are due. "
-    "If report_total is 0, respond with only [SILENT]. "
-    "Otherwise show each harness's markdown as returned, keeping every needs-you item, status, caveat and source. "
-    "Then stop: do not add an interpretation, do not change any harness, and never call el_harness_seen. "
-    "Never say what to buy, sell, size or time. End with: run /el seen <id> once you have read it."
+    "Call el_harness_check with no arguments, then el_watch_check with no arguments, to check the user's saved "
+    "EquityLayer theses and watchlists that are due. If report_total is 0 in both, respond with only [SILENT]. "
+    "Otherwise show each markdown as returned, keeping every needs-you item, status, new reading, event, caveat and "
+    "source. Then stop: do not add an interpretation, do not change anything, and never call el_harness_seen or "
+    "el_watch_seen. Never say what to buy, sell, size or time. End with: say \"I've read it\" once you have read it."
 )
 FOLLOW_CRON_NAME = "EquityLayer follow check"
 FOLLOW_CRON_PROMPT = (
@@ -29,7 +29,7 @@ FOLLOW_CRON_PROMPT = (
 
 START_TEXT = """**Start researching with EquityLayer**
 
-Type `/equitylayer:start`, or say "Help me start researching with EquityLayer". Hermes asks one question at a time: sector (CPO, space, custom AI chips or your own), your view, companies, what to track, your thresholds and what would prove you wrong. Then it saves your thesis on this machine and sets up a daily check in that chat.
+Type `/equitylayer:start`, or say "Help me start researching with EquityLayer". Four decisions: sector (CPO, space, custom AI chips or your own), how to follow it (curated readings, or your own view), one card to approve, and how often to check. Hermes shows live readings before asking you for anything, saves on this machine, sets up the daily check in that chat, and keeps a local dashboard (`/el dashboard`).
 
 It never says what to buy, sell, size or time."""
 
@@ -37,6 +37,8 @@ HELP = """**EquityLayer: track your own thesis**
 
 - `/equitylayer:start`: guided setup, one question at a time (start here)
 - `/el profile`: your saved research profile (sectors, check time, language)
+- `/el dashboard`: write the local dashboard and show where it is
+- `/el watches` · `/el watch-check [id]` · `/el watch-seen <id>` · `/el unwatch <id>`: curated readings you follow
 - `/el plan [--theme optical_cpo] [--company 3363.TWO] <your thesis>`: find catalog variables that could track it (nothing is stored)
 - `/el var <variable id>`: read a variable's unit, caveat and recent readings
 - `/el theses`: list the harnesses saved on this machine
@@ -94,6 +96,10 @@ def _plan_args(words: list[str]) -> dict:
             args["entities"].append(value)
     args["thesis_text"] = " ".join(rest)
     return args
+
+
+def _watch_check_as_person(service: EquityLayerTools, args: dict) -> dict:
+    return service._watch_check(args, seen=True)
 
 
 def _check_as_person(service: EquityLayerTools, args: dict) -> dict:
@@ -154,6 +160,16 @@ def make_slash_handler(service: EquityLayerTools):
             return START_TEXT
         if command == "profile":
             return _render(run(EquityLayerTools._profile_get, {}))
+        if command == "dashboard":
+            return _render(run(EquityLayerTools._dashboard, {}))
+        if command in ("watches", "watchlists"):
+            return _render(run(EquityLayerTools._watch_list, {"watch_id": first}))
+        if command == "watch-check":
+            return _render(run(_watch_check_as_person, {"watch_id": first}))
+        if command == "watch-seen":
+            return _render(run(EquityLayerTools._watch_seen, {"watch_id": first}))
+        if command == "unwatch":
+            return _render(run(EquityLayerTools._watch_remove, {"watch_id": first}))
         if command == "plan":
             args = _plan_args(rest)
             if not args.get("thesis_text"):

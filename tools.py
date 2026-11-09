@@ -10,6 +10,9 @@ from typing import Any, Callable
 from . import formatters
 from .harness_store import HarnessStore, default_harness_store
 from .profile_store import SECTORS, ProfileStore, default_profile_store, describe, validate_fields
+from .watch_store import WatchStore, default_watch_store
+from .watch_tools import WatchTools
+from . import dashboard as dashboard_page
 from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
@@ -68,7 +71,7 @@ def _safe(method: Callable[..., dict]) -> Callable[..., str]:
     return handler
 
 
-class EquityLayerTools(HarnessTools):
+class EquityLayerTools(HarnessTools, WatchTools):
     def __init__(
         self,
         get_config: Callable[..., Any] | None = None,
@@ -77,6 +80,7 @@ class EquityLayerTools(HarnessTools):
         transport: Any = None,
         harness_store_factory: Callable[[], HarnessStore] = default_harness_store,
         profile_store_factory: Callable[[], ProfileStore] = default_profile_store,
+        watch_store_factory: Callable[[], WatchStore] = default_watch_store,
     ):
         self._get_config = get_config or (lambda key, default=None: default)
         self._in_cron = in_cron or (lambda: False)
@@ -84,6 +88,7 @@ class EquityLayerTools(HarnessTools):
         self._transport = transport
         self._harness_store_factory = harness_store_factory
         self._profile_store_factory = profile_store_factory
+        self._watch_store_factory = watch_store_factory
         self._plan_ids = None
         self._locked_ids: set[str] = set()
 
@@ -130,6 +135,41 @@ class EquityLayerTools(HarnessTools):
     def _call(self, tool: str, arguments: dict) -> dict:
         url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL)
         return McpClient(url, transport=self._transport).call_tool(tool, arguments)
+
+    def _call_full(self, tool: str, arguments: dict) -> dict:
+        """Events and due dates live on the same server's full tool list (/mcp/full), not a second service."""
+        url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL).rstrip("/")
+        if not url.endswith("/mcp/full"):
+            url = url + "/full"
+        return McpClient(url, transport=self._transport).call_tool(tool, arguments)
+
+    # -- dashboard ---------------------------------------------------------------------------------
+
+    def _dashboard_root(self):
+        return self._harness_store_factory().dir.parent
+
+    def _render_dashboard(self):
+        theses, _ = self._harness_store_factory().all()
+        watchlists, _ = self._watch_store_factory().all()
+        page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists)
+        return dashboard_page.write(self._dashboard_root(), page)
+
+    def _refresh_dashboard(self) -> None:
+        """Keep the local page current after a check. A failure here never fails the check."""
+        try:
+            self._render_dashboard()
+        except Exception:  # noqa: BLE001
+            logger.warning("EquityLayer dashboard not refreshed", exc_info=True)
+
+    def _dashboard(self, args: dict) -> dict:
+        path = self._render_dashboard()
+        return {
+            "ok": True,
+            "artifact_file": str(path),
+            "markdown": (f"Dashboard updated: `{path}`\n\nIt shows what you follow, your theses, what needs you, "
+                         "recent events and what is due next, from the files on this machine. Open it from Artifacts "
+                         "in Hermes Desktop, or in any browser. It contacts no one."),
+        }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:
         """Skip the network for an entry the registry already showed as non-public."""
@@ -489,6 +529,11 @@ class EquityLayerTools(HarnessTools):
 
     el_list_registry = _safe(_registry)
     el_profile_get = _safe(_profile_get)
+    el_watch_save = _safe(WatchTools._watch_save)
+    el_watch_check = _safe(WatchTools._watch_check)
+    el_watch_seen = _safe(WatchTools._watch_seen)
+    el_watch_list = _safe(WatchTools._watch_list)
+    el_dashboard_render = _safe(_dashboard)
     el_profile_save = _safe(_profile_save)
     el_get_pack = _safe(_pack)
     el_scorecard = _safe(_scorecard)
