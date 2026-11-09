@@ -49,10 +49,12 @@ class FakeMcp(httpx.MockTransport):
 def make_service(tmp_path):
     from equitylayer_plugin.follows import FollowStore
     from equitylayer_plugin.harness_store import HarnessStore
+    from equitylayer_plugin.profile_store import ProfileStore
     from equitylayer_plugin.tools import EquityLayerTools
 
     store = FollowStore(tmp_path)
     harnesses = HarnessStore(tmp_path)
+    profiles = ProfileStore(tmp_path)
 
     def build(routes=None, config=None, in_cron=False):
         settings = config or {}
@@ -62,6 +64,7 @@ def make_service(tmp_path):
             in_cron=lambda: in_cron,
             store_factory=lambda: store,
             harness_store_factory=lambda: harnesses,
+            profile_store_factory=lambda: profiles,
             transport=transport,
         )
         return service, transport, store

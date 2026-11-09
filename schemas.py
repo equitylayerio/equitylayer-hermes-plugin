@@ -230,3 +230,35 @@ EL_HARNESS_LIST = {
         "properties": {"harness_id": {"type": "string", "description": "Optional local id to open in full."}},
     },
 }
+
+
+EL_PROFILE_GET = {
+    "name": "el_profile_get",
+    "description": (
+        "Read the person's local EquityLayer research profile (sectors, whether they had a view, how often to "
+        "check, language), the theses saved on this machine, and the sector options with their live coverage. "
+        "Call it first when the person starts or returns, so you skip questions already answered. Local only."
+    ),
+    "parameters": {"type": "object", "properties": {}},
+}
+
+EL_PROFILE_SAVE = {
+    "name": "el_profile_save",
+    "description": (
+        "Save the person's answers from the setup steps to their local research profile, merging with what is "
+        "saved. Only save what the person chose. Local only; never sent to EquityLayer. Refused in scheduled runs."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "sectors": {"type": "array", "items": {"type": "string", "enum": [
+                "optical_cpo", "space_infrastructure", "custom_asic", "physical_ai", "other"]},
+                "description": "Sectors the person chose, in their order."},
+            "has_view": {"type": "boolean", "description": "True if they came with a thesis, false if you helped form one."},
+            "check": {"type": "string", "enum": ["daily", "weekly", "manual"], "description": "How often to check."},
+            "check_time": {"type": "string", "description": "HH:MM, 24-hour, for daily or weekly checks."},
+            "timezone": {"type": "string", "description": "Area/City, for example Asia/Taipei."},
+            "language": {"type": "string", "description": "Language tag the person writes in, for example en or zh-Hant."},
+        },
+    },
+}

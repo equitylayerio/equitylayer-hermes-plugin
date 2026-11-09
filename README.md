@@ -38,9 +38,10 @@ A plain `mcp.json` connector gives the model EquityLayer's tools. It cannot reme
 - **Local harness and baseline storage** (one JSON file per harness, written atomically, under Hermes's `plugin-data/equitylayer/`).
 - **A scheduled check** (`/blueprint equitylayer:thesis-check` or a ready `hermes cron create` line) that only contacts EquityLayer for harnesses that are due, stays silent when nothing moved, and repeats an unread alert instead of marking it read.
 - **Readable statuses**: link table, wrong_if results, a "Needs you" block, what changed since your baseline, caveats and license attributions.
-- **Recall across chats.** Each new chat starts with a short list of the theses you track (id, title, last check date and state), rebuilt from the local files, so you can say "how is my CPO thesis doing?" in any chat.
+- **Guided start** (`/equitylayer:start`): one question at a time, with a recommendation and a plain explanation at each step, from sector to a saved thesis and a daily check in that chat.
+- **Recall across chats.** Each new chat starts with your research profile and a short list of the theses you track (id, title, last check date and state), rebuilt from the local files, so you can say "how is my CPO thesis doing?" in any chat.
 - **Slash commands** (`/el plan`, `/el check`, `/el seen`, ...) that work without asking the model.
-- **A bundled skill** (`equitylayer-thesis-harness`) that teaches the model the careful step (choose only listed variables, read every caveat, thresholds are your judgment) and the stop rule.
+- **Bundled skills** (`start`, `equitylayer-thesis-harness`) that teach the model the careful step (choose only listed variables, read every caveat, thresholds are your judgment) and the stop rule.
 
 ## Install
 
@@ -54,7 +55,25 @@ No account, key or sign-in is needed. The default endpoint is `https://equitylay
 
 Using EquityLayer from another agent (Claude, Codex, Cursor) instead of Hermes? See [equitylayerio/equitylayer-research-onboarding](https://github.com/equitylayerio/equitylayer-research-onboarding).
 
-## 60-second quick start
+## Start here
+
+In a Hermes chat (terminal, Desktop or Webapp), type:
+
+```text
+/equitylayer:start
+```
+
+or just say *"Help me start researching with EquityLayer."* Hermes asks one question at a time, each with a recommended option and a plain explanation:
+
+1. Is there published research to follow? (It says so plainly when there is none.)
+2. Which sector: CPO and optical networking (recommended), space infrastructure, custom AI chips, or something else.
+3. Do you already have a view? If not, three short questions help you write your own one-sentence thesis. EquityLayer never writes it for you.
+4. Which companies, what to track (with what each reading can't show), your thresholds, and what would prove you wrong.
+5. Save, check it now, and how often to check. Hermes sets up the daily check in that chat itself.
+
+It remembers your answers on this machine, so next time it skips straight to "add another thesis" or "check my theses".
+
+## 60-second quick start (by hand)
 
 In a Hermes chat:
 
@@ -87,6 +106,8 @@ In a Hermes chat:
 
 | Command | What it does |
 | --- | --- |
+| `/equitylayer:start` | Guided setup, one question at a time. Start here. |
+| `/el profile` | Your research profile (sectors, check time, language). |
 | `/el plan [--theme ID] [--company X] <thesis>` | Candidate variables for your thesis. Nothing is stored. |
 | `/el var <variable id>` | Unit, cadence, caveat, scope breaks and recent readings of one variable. |
 | `/el theses` | Harnesses saved on this machine, with last check, statuses and next due date. |
@@ -110,6 +131,7 @@ Themes for `--theme`: `ai_compute`, `optical_cpo`, `custom_asic`, `ai_power_ther
 | `el_harness_check` | Check one harness, every due harness, or an unsaved draft. |
 | `el_harness_seen` | Keep the new baseline after the user says they read it. Refused in scheduled runs. |
 | `el_harness_list` | List local harnesses, or open one in full. |
+| `el_profile_get`, `el_profile_save` | Read or save the person's local research profile and the sector options. Never sent to EquityLayer. |
 | `el_list_registry`, `el_get_pack`, `el_scorecard` | Published research. |
 | `el_follow_create`, `el_follow_check`, `el_follow_list` | Local Follow Cards for a published Pack. |
 
@@ -127,8 +149,8 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 
 - **Network:** every call goes over HTTPS to `https://equitylayer.io/mcp`. The URL setting accepts only that host, or `http://localhost` for development. No other host is contacted.
 - **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server reports that it stores neither the thesis nor the harness (`"stored": false` in its responses). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.3`.
-- **Local data:** harnesses, baselines, a 30-entry check history and Follow Cards are written under Hermes's `plugin-data/equitylayer/` for the active profile. Nothing else on disk is read.
-- **Recall in new chats:** at the start of each new chat the plugin adds a short system prompt section (Hermes's `register_system_prompt_section`) listing your saved harnesses: id, title, last check date and state, at most 2,000 characters. It is rebuilt from the local files for every new chat, nothing is written to Hermes memory, and nothing extra is sent to EquityLayer. Within a chat the list stays as it was when the chat started, and Hermes keeps the system prompt with that chat's saved history, so a title stays in older chats after you delete its harness. The section goes to whichever model provider you use with Hermes, like the rest of the prompt. Turn it off with `recall_in_new_chats: false`.
+- **Local data:** harnesses, baselines, a 30-entry check history, Follow Cards and your research profile (sectors, whether you came with a view, check time, timezone, language; fixed values only) are written under Hermes's `plugin-data/equitylayer/` for the active profile. Nothing else on disk is read.
+- **Recall in new chats:** at the start of each new chat the plugin adds a short system prompt section (Hermes's `register_system_prompt_section`) listing your research profile and saved harnesses: id, title, last check date and state, at most 2,000 characters. It is rebuilt from the local files for every new chat, nothing is written to Hermes memory, and nothing extra is sent to EquityLayer. Within a chat the list stays as it was when the chat started, and Hermes keeps the system prompt with that chat's saved history, so a title stays in older chats after you delete its harness. The section goes to whichever model provider you use with Hermes, like the rest of the prompt. Turn it off with `recall_in_new_chats: false`.
 - **No credentials:** the plugin holds no key and never pays. A paid or gated response comes back as `entitlement_or_payment_required` with a link; the plugin does not authenticate or pay for you.
 - **No shell commands, no background processes, no self-updates.** Scheduling uses Hermes's own cron.
 - **Data licenses:** readings carry the attribution their license requires (for example Taipei Exchange open data under Taiwan's Open Government Data License), and the plugin keeps it in what it shows.
@@ -139,7 +161,7 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `mcp_url` | `https://equitylayer.io/mcp` | `http://localhost:<port>/mcp` is accepted for development. |
-| `recall_in_new_chats` | `true` | List saved harnesses (id, title, last check date and state) at the start of each new chat. |
+| `recall_in_new_chats` | `true` | List your research profile and saved harnesses (id, title, last check date and state) at the start of each new chat. |
 
 ```bash
 hermes config set plugins.entries.equitylayer.settings.mcp_url https://equitylayer.io/mcp

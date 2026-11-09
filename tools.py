@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from . import formatters
 from .harness_store import HarnessStore, default_harness_store
+from .profile_store import SECTORS, ProfileStore, default_profile_store, describe, validate_fields
 from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
@@ -75,12 +76,14 @@ class EquityLayerTools(HarnessTools):
         store_factory: Callable[[], FollowStore] = default_store,
         transport: Any = None,
         harness_store_factory: Callable[[], HarnessStore] = default_harness_store,
+        profile_store_factory: Callable[[], ProfileStore] = default_profile_store,
     ):
         self._get_config = get_config or (lambda key, default=None: default)
         self._in_cron = in_cron or (lambda: False)
         self._store_factory = store_factory
         self._transport = transport
         self._harness_store_factory = harness_store_factory
+        self._profile_store_factory = profile_store_factory
         self._plan_ids = None
         self._locked_ids: set[str] = set()
 
@@ -453,7 +456,40 @@ class EquityLayerTools(HarnessTools):
 
     # -- Hermes tool handlers ----------------------------------------------------------------------
 
+    # -- research profile (local) -----------------------------------------------------------------
+
+    def _profile_get(self, args: dict) -> dict:
+        profile = self._profile_store_factory().get()
+        harnesses, _ = self._harness_store_factory().all()
+        about = describe(profile)
+        lines = ["**Your EquityLayer research profile** (this machine only)", ""]
+        lines.append(f"- {about[0].upper() + about[1:]}." if about else "- Not set up yet. Type `/equitylayer:start`.")
+        lines.append(f"- Saved theses: {len(harnesses)}" + (" (`/el theses`)" if harnesses else ""))
+        return {
+            "ok": True,
+            "markdown": "\n".join(lines),
+            "profile": profile,
+            "returning": bool(profile or harnesses),
+            "saved_harnesses": [{"id": r.get("id"), "title": r.get("title")} for r in harnesses][:15],
+            "sectors": [dict(s) for s in SECTORS],
+            "stored": "local only; never sent to EquityLayer",
+        }
+
+    def _profile_save(self, args: dict) -> dict:
+        if self._in_cron():
+            return {"ok": False, "error": "not_in_scheduled_run",
+                    "message": "A scheduled run never changes the research profile."}
+        fields = {k: v for k, v in args.items() if v is not None}
+        if not fields:
+            return {"ok": False, "error": "missing_argument", "argument": "a profile field",
+                    "message": "Provide at least one of: sectors, has_view, check, check_time, timezone, language."}
+        validate_fields(fields)  # raises ValueError → invalid_argument
+        profile = self._profile_store_factory().save(fields)
+        return {"ok": True, "profile": profile, "stored": "local only; never sent to EquityLayer"}
+
     el_list_registry = _safe(_registry)
+    el_profile_get = _safe(_profile_get)
+    el_profile_save = _safe(_profile_save)
     el_get_pack = _safe(_pack)
     el_scorecard = _safe(_scorecard)
     el_follow_create = _safe(_follow_create)

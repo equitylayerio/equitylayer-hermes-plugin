@@ -1,4 +1,4 @@
-"""Recall across chats: a short pointer list of saved harnesses, rendered at the start of each new session.
+"""Recall across chats: the research profile and a pointer list of saved harnesses, rendered at the start of each new session.
 
 The local harness files stay the only source of truth. This list is rebuilt from them every time a
 session starts, so it cannot drift, and nothing is written to Hermes memory.
@@ -13,6 +13,7 @@ import unicodedata
 from typing import Any, Callable
 
 from .harness_store import HARNESS_ID_RE, HarnessStore, default_harness_store, is_due
+from .profile_store import ProfileStore, default_profile_store, describe
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,9 @@ FOOTER = (
     "list is a pointer, not evidence, so never quote statuses or readings from it."
 )
 EMPTY = "No EquityLayer thesis harness is saved on this machine yet."
+START_HINT = (
+    "If the user wants to research a sector or track a thesis with EquityLayer, follow the equitylayer:start skill."
+)
 
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -59,10 +63,12 @@ def _state(record: dict) -> str:
     return "due" if is_due(record) else "waiting"
 
 
-def render(records: list[dict], unreadable: list[str] | None = None) -> str:
+def render(records: list[dict], unreadable: list[str] | None = None, profile: dict | None = None) -> str:
     """Header and footer always fit; entries are dropped (and counted) rather than cut mid-line."""
+    about = describe(profile)
+    profile_line = [f"Research profile (from the user's setup answers): {about}."] if about else []
     if not records and not unreadable:
-        return EMPTY
+        return "\n".join([*profile_line, EMPTY, START_HINT])
     tail = []
     if unreadable:
         tail.append(f"- {len(unreadable)} local file(s) could not be read; el_harness_list names them.")
@@ -76,16 +82,17 @@ def render(records: list[dict], unreadable: list[str] | None = None) -> str:
     while shown:
         hidden = len(entries) - len(shown)
         more = [f"- … and {hidden} more; el_harness_list shows all."] if hidden else []
-        text = "\n".join([HEADER, *shown, *more, *tail])
+        text = "\n".join([*profile_line, HEADER, *shown, *more, *tail])
         if len(text) <= MAX_CHARS:
             return text
         shown = shown[:-1]
-    return "\n".join([HEADER, f"- {len(entries)} saved; el_harness_list shows them.", *tail])
+    return "\n".join([*profile_line, HEADER, f"- {len(entries)} saved; el_harness_list shows them.", *tail])
 
 
 def make_section(
     get_config: Callable[..., Any],
     store_factory: Callable[[], HarnessStore] = default_harness_store,
+    profile_factory: Callable[[], ProfileStore] = default_profile_store,
 ) -> Callable[[Any], str]:
     """The callable Hermes runs once per new session. It never raises."""
 
@@ -95,7 +102,7 @@ def make_section(
             if enabled is False or str(enabled).strip().lower() in ("false", "0", "no", "off"):
                 return ""
             records, unreadable = store_factory().all()
-            return render(records, unreadable)
+            return render(records, unreadable, profile_factory().get())
         except Exception:  # noqa: BLE001 - a broken pointer list must never break prompt construction
             logger.warning("EquityLayer recall section skipped", exc_info=True)
             return ""

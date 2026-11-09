@@ -24,6 +24,8 @@ def register(ctx) -> None:
         (schemas.EL_HARNESS_CHECK, service.el_harness_check),
         (schemas.EL_HARNESS_SEEN, service.el_harness_seen),
         (schemas.EL_HARNESS_LIST, service.el_harness_list),
+        (schemas.EL_PROFILE_GET, service.el_profile_get),
+        (schemas.EL_PROFILE_SAVE, service.el_profile_save),
         # Published research (secondary)
         (schemas.EL_LIST_REGISTRY, service.el_list_registry),
         (schemas.EL_GET_PACK, service.el_get_pack),

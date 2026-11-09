@@ -1,9 +1,10 @@
 name: equitylayer
-version: "0.3.0"
+version: "0.3.1"
 manifest_version: 2
 api_version: 1
 description: >
-  Research CPO or space infrastructure with your own AI.
+  Research CPO or space infrastructure with your own AI. Type /equitylayer:start and Hermes
+  guides you one question at a time: sector, your view, companies, variables, thresholds.
   EquityLayer's MCP maps your thesis to tracked variables with caveats and gaps; you
   write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
   harness and baseline on your machine and checks it on a schedule, reporting which
@@ -21,6 +22,8 @@ provides_tools:
   - el_harness_check
   - el_harness_seen
   - el_harness_list
+  - el_profile_get
+  - el_profile_save
   - el_list_registry
   - el_get_pack
   - el_scorecard
@@ -40,4 +43,4 @@ config_schema:
     type: bool
     default: true
     label: "Recall saved theses in new chats"
-    description: "At the start of each new chat, list your saved harnesses (id, title, last check date and state) in the system prompt, read from local files. Turn off to keep titles out of prompts sent to your model provider."
+    description: "At the start of each new chat, list your saved harnesses (id, title, last check date and state) and your research profile (sectors, check time, language) in the system prompt, read from local files. Turn off to keep them out of prompts sent to your model provider."

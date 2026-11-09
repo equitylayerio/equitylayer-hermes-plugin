@@ -60,7 +60,7 @@ def test_other_surfaces_are_registered():
     ctx = _registered()
     assert ctx.commands == ["el"]
     assert ctx.cli == ["equitylayer"]
-    assert ctx.skills == ["equitylayer-research", "equitylayer-thesis-harness"]
+    assert ctx.skills == ["equitylayer-research", "equitylayer-thesis-harness", "start"]
     assert ctx.blueprints == ["thesis-check", "follow-check"]
     assert ctx.sections == ["equitylayer.tracked-theses"]
 
@@ -77,3 +77,26 @@ def test_skills_never_tell_the_model_to_trade():
     for path in (ROOT / "skills").glob("*/SKILL.md"):
         text = path.read_text(encoding="utf-8")
         assert "Never say what to buy, sell, size or time" in text, path
+
+
+def test_start_skill_schedules_with_the_exact_cron_prompt():
+    from equitylayer_plugin.commands import HARNESS_SKILL, THESIS_CRON_PROMPT
+
+    text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    assert THESIS_CRON_PROMPT in text
+    assert HARNESS_SKILL in text
+    assert "`deliver`: `origin`" in text
+    assert "Do not run the job now." in text
+
+
+def test_start_skill_offers_the_websites_sectors_in_order():
+    from equitylayer_plugin.profile_store import SECTORS
+
+    # Mirrors ONBOARDING_SECTORS in EquityLayer's lib/harness.ts (AC, 2026-11-10).
+    assert [s["label"] for s in SECTORS] == [
+        "CPO and optical networking", "Space infrastructure", "Custom AI chips (ASIC)", "Something else"]
+    assert [s["id"] for s in SECTORS if s["recommended"]] == ["optical_cpo"]
+    text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
+                   "el_profile_get", "el_profile_save", "Call `el_harness_save` only after a clear yes"):
+        assert phrase in text

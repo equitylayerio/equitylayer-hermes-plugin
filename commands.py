@@ -27,8 +27,16 @@ FOLLOW_CRON_PROMPT = (
     "This is research evidence, not investment advice."
 )
 
+START_TEXT = """**Start researching with EquityLayer**
+
+Type `/equitylayer:start`, or say "Help me start researching with EquityLayer". Hermes asks one question at a time: sector (CPO, space, custom AI chips or your own), your view, companies, what to track, your thresholds and what would prove you wrong. Then it saves your thesis on this machine and sets up a daily check in that chat.
+
+It never says what to buy, sell, size or time."""
+
 HELP = """**EquityLayer: track your own thesis**
 
+- `/equitylayer:start`: guided setup, one question at a time (start here)
+- `/el profile`: your saved research profile (sectors, check time, language)
 - `/el plan [--theme optical_cpo] [--company 3363.TWO] <your thesis>`: find catalog variables that could track it (nothing is stored)
 - `/el var <variable id>`: read a variable's unit, caveat and recent readings
 - `/el theses`: list the harnesses saved on this machine
@@ -142,6 +150,10 @@ def make_slash_handler(service: EquityLayerTools):
         run = service.run
 
         # Your own thesis
+        if command in ("start", "setup", "onboard"):
+            return START_TEXT
+        if command == "profile":
+            return _render(run(EquityLayerTools._profile_get, {}))
         if command == "plan":
             args = _plan_args(rest)
             if not args.get("thesis_text"):

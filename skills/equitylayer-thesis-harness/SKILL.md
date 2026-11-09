@@ -51,7 +51,9 @@ Optional: `title`, `differs_from`, `do_not_track`, `exposure` (companies and ope
 2. `el_harness_check` with `harness_id`. Show the `markdown` as returned: statuses, wrong_if results, what changed, caveats, sources.
 3. `no_data` is not good news. It says what could not be compared.
 4. The new baseline is not kept until the user says they have read the result. Only then call `el_harness_seen`.
-5. For daily checks, point the user to `/el schedule` or `/blueprint equitylayer:thesis-check`. Scheduled runs are silent when nothing moved.
+5. For daily checks, create the job from this chat as step 10 of the `equitylayer:start` skill describes (fixed prompt, delivered here), or point the user to `/el schedule` or `/blueprint equitylayer:thesis-check`. Scheduled runs are silent when nothing moved.
+
+A person new to EquityLayer, or one who has no thesis yet, is better served by the `equitylayer:start` skill: it asks one question at a time.
 
 ## Stop at the person
 
