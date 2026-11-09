@@ -28,7 +28,7 @@ provides_tools:
   - el_follow_check
   - el_follow_list
 
-requires_hermes: ">=0.21.6"
+requires_hermes: ">=0.23.0"
 
 config_schema:
   mcp_url:
