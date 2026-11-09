@@ -1,23 +1,23 @@
 # EquityLayer for Hermes Agent
 
-**Research CPO, Physical AI and space infrastructure with your own AI. EquityLayer gives Hermes the tracked variables, source rules and caveats; you write the thesis; Hermes checks it every day and tells you what moved, what is late and what needs you. It never tells you what to trade.**
+**Research CPO or space infrastructure with your own AI. EquityLayer gives Hermes the tracked variables, source rules and caveats; you write the thesis; Hermes checks it every day and tells you what moved, what is late and what needs you. It never tells you what to trade.**
 
-Ask an AI whether robots are really scaling, or whether co-packaged optics is shipping, and you usually get a confident summary with no dates, no sources and no way to tell later whether it still holds. This plugin turns your own view into something Hermes can check against official readings: issuer filings, exchange open data and company statements, each with its period, its source and what it cannot show.
+Ask an AI whether co-packaged optics is really shipping, or whether launch backlogs are turning into revenue, and you usually get a confident summary with no dates, no sources and no way to tell later whether it still holds. This plugin turns your own view into something Hermes can check against official readings: issuer filings, exchange open data and company statements, each with its period, its source and what it cannot show.
 
 You state a thesis in your own words. EquityLayer's public MCP maps it to a catalog of tracked variables (shipments, segment revenue, orders, capex, issuer statements) with caveats and coverage gaps. You and Hermes write the four parts: **hypothesis, why, tracking, wrong_if**. The plugin stores that harness and its baseline on your machine, and a daily Hermes job checks it against the latest readings. EquityLayer stores neither the thesis nor the harness.
 
 **Coverage today (2026-11-09):**
 
-| Theme | What you can track now |
+| Theme | What you can track |
 | --- | --- |
-| CPO and optical networking | The deepest theme: 28 variables across Taiwan, US and Japan suppliers (revenue, segments, capex, issuer statements). |
-| Physical AI | Robot lidar shipments (Hesai), Teradyne Robotics revenue, Tesla's Optimus statements and Nabtesco orders are readable. Most robot-maker readings are still withheld under source-rights review and show as "no data". |
-| Space infrastructure | In research. Launch and satellite variables are not in the catalog yet, so a space thesis will mostly show gaps. |
+| CPO and optical networking | Live now: 28 variables across Taiwan, US and Japan suppliers (revenue, segments, capex, issuer statements). |
+| Space infrastructure | Being added: launch and satellite variables are in review and not in the live catalog yet. Until they land, a space thesis mostly shows gaps. |
+| Physical AI | Coming once source rights clear: most robot-maker readings are withheld today and show as "no data". |
 
 The plugin says which readings are missing or withheld instead of guessing.
 
 ```
-you: "Robots reach volume by 2028, and component suppliers show it in shipments first"
+you: "CPO reaches volume by end-2027, and optical suppliers show it in revenue first"
         │
         ▼  el_plan_thesis ──► EquityLayer MCP: candidate variables, caveats, gaps (stores nothing)
 you + Hermes pick variables, set your own thresholds, write wrong_if
@@ -58,12 +58,12 @@ Using EquityLayer from another agent (Claude, Codex, Cursor) instead of Hermes? 
 In a Hermes chat:
 
 1. **State your thesis.**
-   > My thesis: robots move from pilots to volume production by the end of 2028, and component suppliers show it in shipments before humanoid makers report robot revenue. Help me track it with EquityLayer. Theme: physical_ai. Show me what I could track first; don't save anything yet.
+   > My thesis: co-packaged optics reaches volume in AI switches by the end of 2027, and optical component suppliers show it in revenue before switch makers do. Help me track it with EquityLayer. Theme: optical_cpo. Show me what I could track first; don't save anything yet.
 
    Hermes calls `el_plan_thesis` and shows candidate variables with their caveats and gaps. Or run it directly:
 
    ```text
-   /el plan --theme physical_ai Robots reach volume production by 2028, and component suppliers show it in shipments first.
+   /el plan --theme optical_cpo Co-packaged optics reaches volume in AI switches by end-2027, and optical suppliers show it in revenue first.
    ```
 
 2. **Pick variables and thresholds with Hermes.** It reads recent levels with `el_get_variable`, proposes the four parts with thresholds marked as your judgment, and saves only after you confirm.
@@ -154,7 +154,7 @@ hermes plugins doctor . --ci
 
 Set `EQUITYLAYER_TEST_MCP_URL=http://localhost:3420/mcp` to run the live tests against a local server.
 
-The example harnesses in `tests/harness_demo.json` (CPO) and `tests/harness_physical_ai.json` (Physical AI) are illustrative user theses for tests. It is not EquityLayer research or a published view, and its thresholds are arbitrary.
+The example harnesses in `tests/harness_demo.json` (CPO) and `tests/harness_physical_ai.json` (Physical AI) are illustrative user theses for tests. They are not EquityLayer research or published views, and their thresholds are arbitrary.
 
 ## License
 

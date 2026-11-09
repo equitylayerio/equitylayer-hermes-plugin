@@ -3,7 +3,7 @@ version: "0.2.0"
 manifest_version: 2
 api_version: 1
 description: >
-  Research CPO, Physical AI and space infrastructure with your own AI.
+  Research CPO or space infrastructure with your own AI.
   EquityLayer's MCP maps your thesis to tracked variables with caveats and gaps; you
   write the four parts (hypothesis, why, tracking, wrong_if); the plugin keeps the
   harness and baseline on your machine and checks it on a schedule, reporting which
