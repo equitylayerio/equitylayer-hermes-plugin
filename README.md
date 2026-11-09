@@ -38,7 +38,7 @@ A plain `mcp.json` connector gives the model EquityLayer's tools. It cannot reme
 - **Local harness and baseline storage** (one JSON file per harness, written atomically, under Hermes's `plugin-data/equitylayer/`).
 - **A scheduled check** (`/blueprint equitylayer:thesis-check` or a ready `hermes cron create` line) that only contacts EquityLayer for harnesses that are due, stays silent when nothing moved, and repeats an unread alert instead of marking it read.
 - **Readable statuses**: link table, wrong_if results, a "Needs you" block, what changed since your baseline, caveats and license attributions.
-- **Recall across chats.** Each new chat starts with a short list of the theses you track (id, title, last check date), rebuilt from the local files, so you can say "how is my CPO thesis doing?" in any chat.
+- **Recall across chats.** Each new chat starts with a short list of the theses you track (id, title, last check date and state), rebuilt from the local files, so you can say "how is my CPO thesis doing?" in any chat.
 - **Slash commands** (`/el plan`, `/el check`, `/el seen`, ...) that work without asking the model.
 - **A bundled skill** (`equitylayer-thesis-harness`) that teaches the model the careful step (choose only listed variables, read every caveat, thresholds are your judgment) and the stop rule.
 
@@ -126,9 +126,9 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 ## Disclosures
 
 - **Network:** every call goes over HTTPS to `https://equitylayer.io/mcp`. The URL setting accepts only that host, or `http://localhost` for development. No other host is contacted.
-- **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server reports that it stores neither the thesis nor the harness (`"stored": false` in its responses). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.2`.
+- **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server reports that it stores neither the thesis nor the harness (`"stored": false` in its responses). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.3`.
 - **Local data:** harnesses, baselines, a 30-entry check history and Follow Cards are written under Hermes's `plugin-data/equitylayer/` for the active profile. Nothing else on disk is read.
-- **Recall in new chats:** at the start of each new chat the plugin adds a short system prompt section (Hermes's `register_system_prompt_section`) listing your saved harnesses: id, title, last check date and state, at most 2,000 characters. It is rebuilt from the local files every time, nothing is written to Hermes memory, and nothing extra is sent to EquityLayer. The section goes to whichever model provider you use with Hermes, like the rest of the prompt. Turn it off with `recall_in_new_chats: false`.
+- **Recall in new chats:** at the start of each new chat the plugin adds a short system prompt section (Hermes's `register_system_prompt_section`) listing your saved harnesses: id, title, last check date and state, at most 2,000 characters. It is rebuilt from the local files for every new chat, nothing is written to Hermes memory, and nothing extra is sent to EquityLayer. Within a chat the list stays as it was when the chat started, and Hermes keeps the system prompt with that chat's saved history, so a title stays in older chats after you delete its harness. The section goes to whichever model provider you use with Hermes, like the rest of the prompt. Turn it off with `recall_in_new_chats: false`.
 - **No credentials:** the plugin holds no key and never pays. A paid or gated response comes back as `entitlement_or_payment_required` with a link; the plugin does not authenticate or pay for you.
 - **No shell commands, no background processes, no self-updates.** Scheduling uses Hermes's own cron.
 - **Data licenses:** readings carry the attribution their license requires (for example Taipei Exchange open data under Taiwan's Open Government Data License), and the plugin keeps it in what it shows.
@@ -139,7 +139,7 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `mcp_url` | `https://equitylayer.io/mcp` | `http://localhost:<port>/mcp` is accepted for development. |
-| `recall_in_new_chats` | `true` | List saved harnesses (id, title, last check) at the start of each new chat. |
+| `recall_in_new_chats` | `true` | List saved harnesses (id, title, last check date and state) at the start of each new chat. |
 
 ```bash
 hermes config set plugins.entries.equitylayer.settings.mcp_url https://equitylayer.io/mcp

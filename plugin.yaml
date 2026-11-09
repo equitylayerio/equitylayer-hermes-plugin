@@ -40,4 +40,4 @@ config_schema:
     type: bool
     default: true
     label: "Recall saved theses in new chats"
-    description: "At the start of each new chat, list your saved harnesses (id, title, last check date) in the system prompt, read from local files. Turn off to keep titles out of prompts sent to your model provider."
+    description: "At the start of each new chat, list your saved harnesses (id, title, last check date and state) in the system prompt, read from local files. Turn off to keep titles out of prompts sent to your model provider."

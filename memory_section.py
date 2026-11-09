@@ -6,11 +6,13 @@ session starts, so it cannot drift, and nothing is written to Hermes memory.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+import unicodedata
 from typing import Any, Callable
 
-from .harness_store import HarnessStore, default_harness_store, is_due
+from .harness_store import HARNESS_ID_RE, HarnessStore, default_harness_store, is_due
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,24 @@ FOOTER = (
 EMPTY = "No EquityLayer thesis harness is saved on this machine yet."
 
 
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def _one_line(text: Any, limit: int = TITLE_CHARS) -> str:
-    flat = re.sub(r"\s+", " ", str(text or "")).strip()
-    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+    """One line, no control or format characters (bidi included), bounded, quotes escaped."""
+    flat = re.sub(r"\s+", " ", str(text or ""))
+    flat = "".join(ch for ch in flat if unicodedata.category(ch) not in ("Cc", "Cf")).strip()
+    if len(flat) > limit:
+        flat = flat[: limit - 1].rstrip() + "…"
+    return json.dumps(flat, ensure_ascii=False)[1:-1]
+
+
+def _safe_id(value: Any) -> str:
+    return value if isinstance(value, str) and HARNESS_ID_RE.match(value) else "unknown-id"
+
+
+def _safe_date(value: Any) -> str:
+    return value if isinstance(value, str) and DATE_RE.match(value) else ""
 
 
 def _state(record: dict) -> str:
@@ -53,8 +70,8 @@ def render(records: list[dict], unreadable: list[str] | None = None) -> str:
     entries = []
     for record in records:
         last = record.get("last_check") if isinstance(record.get("last_check"), dict) else {}
-        checked = last.get("as_of") or "never checked"
-        entries.append(f"- {record.get('id')}: \"{_one_line(record.get('title'))}\" (last check {checked}; {_state(record)})")
+        checked = _safe_date(last.get("as_of")) or ("unknown" if last else "never checked")
+        entries.append(f"- {_safe_id(record.get('id'))}: \"{_one_line(record.get('title'))}\" (last check {checked}; {_state(record)})")
     shown = entries[:MAX_LISTED]
     while shown:
         hidden = len(entries) - len(shown)

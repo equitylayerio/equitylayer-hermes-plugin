@@ -11,7 +11,7 @@ import httpx
 DEFAULT_MCP_URL = "https://equitylayer.io/mcp"
 ALLOWED_HOST = "equitylayer.io"
 ALLOWED_PATHS = ("/mcp", "/mcp/full")
-USER_AGENT = "EquityLayerHermesPlugin/0.2"
+USER_AGENT = "EquityLayerHermesPlugin/0.3"
 TIMEOUT_SECONDS = 45.0
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 RETRYABLE_STATUS = (502, 503, 504)

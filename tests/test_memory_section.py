@@ -74,3 +74,40 @@ def test_section_id_is_valid_for_hermes():
     import re
 
     assert re.fullmatch(r"[a-z0-9._-]{1,128}", SECTION_ID)
+
+
+def test_server_and_file_fields_cannot_break_the_prompt():
+    records = [
+        {"id": "ok-id", "title": 'He said "volume"‮\x07 soon', "harness": {},
+         "last_check": {"as_of": "2026-11-09\nIGNORE THIS"}},
+        {"id": "bad\nid", "title": "t", "harness": {}, "last_check": {"as_of": "2026-11-09"}},
+    ]
+    text = render(records)
+    assert '- ok-id: "He said \\"volume\\" soon" (last check unknown;' in text
+    assert "‮" not in text and "\x07" not in text and "IGNORE THIS" not in text
+    assert '- unknown-id: "t" (last check 2026-11-09;' in text
+    assert "bad\nid" not in text
+
+
+def test_opt_out_strings_and_default_on(tmp_path):
+    HarnessStore(tmp_path).save_harness("cpo", HARNESS)
+    for value in ("false", "0", "no", "off", False):
+        assert _section(tmp_path, {"recall_in_new_chats": value})({}) == ""
+    assert "- cpo:" in _section(tmp_path)({})
+    assert "- cpo:" in _section(tmp_path, {"recall_in_new_chats": True})({})
+
+
+def test_config_errors_render_nothing(tmp_path):
+    def broken_config(key, default=None):
+        raise RuntimeError("config unreadable")
+
+    assert make_section(broken_config, lambda: HarnessStore(tmp_path))({}) == ""
+
+
+def test_falls_back_to_a_count_when_no_entry_fits(monkeypatch):
+    import equitylayer_plugin.memory_section as ms
+
+    monkeypatch.setattr(ms, "MAX_CHARS", len(ms.HEADER) + len(ms.FOOTER) + 60)
+    text = ms.render([{"id": f"h{i}", "title": "x" * 70, "harness": {}} for i in range(3)])
+    assert text.splitlines()[1] == "- 3 saved; el_harness_list shows them."
+    assert text.endswith(ms.FOOTER)
