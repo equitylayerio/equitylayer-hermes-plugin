@@ -12,7 +12,7 @@ You state a thesis in your own words. EquityLayer's public MCP maps it to a cata
 | --- | --- |
 | CPO and optical networking | Live now: 28 variables across Taiwan, US and Japan suppliers (revenue, segments, capex, issuer statements). |
 | Space infrastructure | Being added: launch and satellite variables are in review and not in the live catalog yet. Until they land, a space thesis mostly shows gaps. |
-| Physical AI | Coming once source rights clear: most robot-maker readings are withheld today and show as "no data". |
+| Physical AI | Coverage planned. |
 
 The plugin says which readings are missing or withheld instead of guessing.
 
@@ -154,7 +154,7 @@ hermes plugins doctor . --ci
 
 Set `EQUITYLAYER_TEST_MCP_URL=http://localhost:3420/mcp` to run the live tests against a local server.
 
-The example harnesses in `tests/harness_demo.json` (CPO) and `tests/harness_physical_ai.json` (Physical AI) are illustrative user theses for tests. They are not EquityLayer research or published views, and their thresholds are arbitrary.
+The example harnesses in `tests/` are illustrative user theses for tests. They are not EquityLayer research or published views, and their thresholds are arbitrary.
 
 ## License
 
