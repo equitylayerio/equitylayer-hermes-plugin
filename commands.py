@@ -13,7 +13,7 @@ RESEARCH_SKILL = "equitylayer:equitylayer-research"
 THESIS_CRON_NAME = "EquityLayer thesis check"
 THESIS_CRON_PROMPT = (
     "Call el_harness_check with no arguments to check the user's saved EquityLayer thesis harnesses that are due. "
-    "If needs_human_total is 0, variables_changed_total is 0 and errors is 0, respond with only [SILENT]. "
+    "If report_total is 0, respond with only [SILENT]. "
     "Otherwise show each harness's markdown as returned, keeping every needs-you item, status, caveat and source. "
     "Then stop: do not add an interpretation, do not change any harness, and never call el_harness_seen. "
     "Never say what to buy, sell, size or time. End with: run /el seen <id> once you have read it."

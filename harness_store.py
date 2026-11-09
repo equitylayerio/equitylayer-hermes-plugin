@@ -137,6 +137,9 @@ class HarnessStore:
             existing["harness"] = harness
             existing["title"] = harness.get("title") or existing.get("title")
             existing["updated_at"] = stamp
+            # A changed harness may have earlier dates, so it is due at the next run.
+            if isinstance(existing.get("last_check"), dict):
+                existing["last_check"]["next_due"] = None
             record, created = existing, False
         else:
             record = {

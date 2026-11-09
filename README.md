@@ -39,6 +39,8 @@ hermes plugins install https://github.com/equitylayerio/equitylayer-hermes-plugi
 
 No account, key or sign-in is needed. The default endpoint is `https://equitylayer.io/mcp`.
 
+Using EquityLayer from another agent (Claude, Codex, Cursor) instead of Hermes? See [equitylayerio/equitylayer-research-onboarding](https://github.com/equitylayerio/equitylayer-research-onboarding).
+
 ## 60-second quick start
 
 In a Hermes chat:
@@ -59,7 +61,7 @@ In a Hermes chat:
    /el check
    ```
 
-   You get each link's status, wrong_if results, what needs you, caveats, sources and the next due date. A slash-command check is read by you directly, so it becomes your baseline.
+   You get each link's status, wrong_if results, what needs you, caveats, sources and the next due date. A slash-command check is read by you directly, so it becomes your baseline. When the model runs a check for you, it asks you to confirm you've read it first.
 4. **Check it every day.**
 
    ```text
@@ -106,12 +108,12 @@ There is no tool that deletes a harness or changes its statuses. Deleting is a s
 - It never changes your hypothesis, thresholds or statuses on its own.
 - `late`, `against`, a fired `wrong_if` and every `needs_human` item are shown to you as such, and the agent stops there.
 - `no_data` is never shown as good news. A withheld value (a paid Pack, or a source whose rights are under review) decides nothing.
-- A scheduled run never marks a check as read, so its alert repeats until you have seen it.
+- A scheduled run never marks a check that has something new as read: that harness is checked again each day and the alert repeats until you have seen it. A check with nothing new (no change, nothing needing you) advances the baseline on its own.
 
 ## Disclosures
 
 - **Network:** every call goes over HTTPS to `https://equitylayer.io/mcp` (and `/mcp/full` for `get_variable`). The URL setting accepts only that host, or `http://localhost` for development. No other host is contacted.
-- **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server does not store the thesis or harness (each response says `"stored": false`). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.2`.
+- **What is sent:** only the tool arguments: your thesis text for `el_plan_thesis`, your harness and last baseline for checks, and the ids you ask about. EquityLayer's server reports that it stores neither the thesis nor the harness (`"stored": false` in its responses). No user id, email or telemetry is sent; the User-Agent is `EquityLayerHermesPlugin/0.2`.
 - **Local data:** harnesses, baselines, a 30-entry check history and Follow Cards are written under Hermes's `plugin-data/equitylayer/` for the active profile. Nothing else on disk is read.
 - **No credentials:** the plugin holds no key and never pays. A paid or gated response comes back as `entitlement_or_payment_required` with a link; the plugin does not authenticate or pay for you.
 - **No shell commands, no background processes, no self-updates.** Scheduling uses Hermes's own cron.

@@ -189,7 +189,7 @@ class McpClient:
         # Every tool on this route is read-only, so one retry on a transient failure is safe.
         last_error = "The EquityLayer MCP did not respond."
         with httpx.Client(
-            timeout=self._timeout, follow_redirects=False, transport=self._transport
+            timeout=self._timeout, follow_redirects=False, transport=self._transport, trust_env=False
         ) as client:
             for _ in range(2):
                 try:

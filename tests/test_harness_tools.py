@@ -92,7 +92,8 @@ def test_update_requires_an_existing_id(make_service):
 
 def test_lint_warnings():
     risky = copy.deepcopy(HARNESS)
-    risky["hypothesis"] = "Should I buy CPO suppliers?"
+    risky["hypothesis"] = "CPO reaches volume by 2027?"
+    risky["tracking"][1]["rules"][0]["say"] = "Sell half if this happens."
     risky["tracking"][0]["rules"] = []
     risky["wrong_if"] = []
     errors, warnings = lint_harness(risky, known_ids={"v:3363.two.revenue.monthly"})
@@ -133,27 +134,64 @@ def test_seen_is_refused_in_scheduled_runs(make_service):
     assert harness_store(service).get(hid)["baseline"] is None
 
 
-def test_due_run_skips_unread_and_not_due_harnesses(make_service):
+def test_due_run_rechecks_unread_and_skips_not_due(make_service):
     service, transport, _ = make_service({"check_thesis_harness": "check_harness_first"}, in_cron=True)
     store = harness_store(service)
     store.save_harness("never-checked", HARNESS)
     store.save_harness("unread", HARNESS)
-    store.record_check("unread", {"links": [], "next_baseline": {"taken_at": "2026-11-09"}}, seen=False)
+    store.record_check("unread", {"links": [], "next_due": {"date": "2099-01-01"},
+                                  "next_baseline": {"taken_at": "2026-11-08"}}, seen=False)
     store.save_harness("later", HARNESS)
     later = store.get("later")
     later["last_check"] = {"next_due": "2099-01-01"}
     store._write(store._path("later"), later)
     result = call(service.el_harness_check, {})
-    assert [c["harness_id"] for c in result["checked"]] == ["never-checked"]
-    assert result["awaiting_read"] == ["unread"]
-    assert "Still waiting for you to read" in result["markdown"]
-    assert len(transport.calls) == 1
+    # An unread check is repeated even though it is not due, so the alert cannot go quiet.
+    assert [c["harness_id"] for c in result["checked"]] == ["never-checked", "unread"]
+    assert result["report_total"] == 2
+    assert result["awaiting_read"] == ["never-checked", "unread"]
+    assert len(transport.calls) == 2
+    assert all(store.get(h)["baseline"] is None for h in ("never-checked", "unread"))
+
+
+def test_check_with_nothing_new_advances_on_its_own(make_service):
+    quiet = {"ok": True, "as_of": "2026-11-10", "links": [{"id": "foci-ramp", "status": "seen"}], "wrong_if": [],
+             "needs_human": [], "next_due": {"date": "2026-12-10"},
+             "changed": {"since": "2026-11-09", "variables": [], "links": [], "wrong_if": [],
+                         "expected_date_moves": [], "added_variables": []},
+             "next_baseline": {"taken_at": "2026-11-10", "variables": [], "links": [], "wrong_if": []}}
+    import json as _json
+    sse = "event: message\ndata: " + _json.dumps({"jsonrpc": "2.0", "id": 1, "result": {
+        "content": [{"type": "text", "text": _json.dumps(quiet)}]}}) + "\n\n"
+    from support import FIXTURES
+    (FIXTURES / "_quiet_tmp.sse").write_text(sse)
+    try:
+        service, _, _ = make_service({"check_thesis_harness": "_quiet_tmp"}, in_cron=True)
+        store = harness_store(service)
+        store.save_harness("cpo", HARNESS)
+        store.record_check("cpo", {"links": [], "next_baseline": {"taken_at": "2026-11-09"}}, seen=True)
+        result = call(service.el_harness_check, {"harness_id": "cpo"})
+        assert result["report_total"] == 0 and result["checked"][0]["baseline_saved"] is True
+        assert store.get("cpo")["baseline"]["taken_at"] == "2026-11-10"
+        assert store.get("cpo")["pending_baseline"] is None
+    finally:
+        (FIXTURES / "_quiet_tmp.sse").unlink()
+
+
+def test_editing_a_harness_makes_it_due(make_service):
+    service, _, _ = make_service({"check_thesis_harness": "check_harness_first"})
+    store = harness_store(service)
+    store.save_harness("cpo", HARNESS)
+    store.record_check("cpo", {"links": [], "next_due": {"date": "2099-01-01"}}, seen=True)
+    assert store.get("cpo")["last_check"]["next_due"] == "2099-01-01"
+    call(service.el_harness_save, {"harness": HARNESS, "harness_id": "cpo"})
+    assert store.get("cpo")["last_check"]["next_due"] is None
 
 
 def test_due_run_with_nothing_due_is_silent_and_offline(make_service):
     service, transport, _ = make_service()
     result = call(service.el_harness_check, {})
-    assert result["checked"] == [] and result["needs_human_total"] == 0 and result["errors"] == 0
+    assert result["checked"] == [] and result["report_total"] == 0 and result["errors"] == 0
     assert transport.calls == []
 
 

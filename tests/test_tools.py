@@ -290,6 +290,7 @@ def test_schedule_snippet_is_shell_safe_and_never_accepts():
     assert "/blueprint equitylayer:thesis-check" in text
     assert "Never set accept_next" in commands.FOLLOW_CRON_PROMPT
     assert "never call el_harness_seen" in commands.THESIS_CRON_PROMPT
+    assert "If report_total is 0" in commands.THESIS_CRON_PROMPT
     assert "[SILENT]" in commands.THESIS_CRON_PROMPT and "[SILENT]" in commands.FOLLOW_CRON_PROMPT
     with pytest.raises(ValueError):
         commands.schedule_text("25:00")

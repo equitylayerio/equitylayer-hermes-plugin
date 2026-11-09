@@ -53,9 +53,7 @@ def lint_harness(harness: Any, known_ids: set[str] | None = None) -> tuple[list[
     hypothesis = str(harness.get("hypothesis") or "")
     if hypothesis.rstrip().endswith("?"):
         warnings.append("The hypothesis is a question. It should take a stand that could be wrong.")
-    text = " ".join(str(harness.get(k) or "") for k in ("hypothesis", "why", "differs_from"))
-    text += " ".join(str(e) for e in harness.get("exposure") or [])
-    if TRADE_WORDS.search(text):
+    if TRADE_WORDS.search(_free_text(harness)):
         warnings.append(
             "The harness mentions trading. It tracks evidence only; what to buy, sell, size or time stays your call "
             "and is never computed here."
@@ -77,6 +75,28 @@ def lint_harness(harness: Any, known_ids: set[str] | None = None) -> tuple[list[
     if isinstance(harness.get("wrong_if"), list) and not harness["wrong_if"]:
         warnings.append("`wrong_if` is empty, so nothing could show the thesis is wrong.")
     return errors, warnings
+
+
+def needs_report(result: dict) -> bool:
+    """True when a person has something to read: a first check, anything that needs them, or any change."""
+    if result.get("needs_human"):
+        return True
+    changed = result.get("changed")
+    if not isinstance(changed, dict):
+        return True  # No baseline yet: the person has never seen these statuses.
+    return any(changed.get(key) for key in ("variables", "links", "wrong_if", "expected_date_moves", "added_variables"))
+
+
+def _free_text(harness: dict) -> str:
+    """Every field a person writes in words, for the trade-language check."""
+    parts = [str(harness.get(k) or "") for k in ("title", "hypothesis", "why", "differs_from")]
+    parts += [str(e) for e in harness.get("exposure") or []]
+    for link in harness.get("tracking") or []:
+        if isinstance(link, dict):
+            parts += [str(link.get(k) or "") for k in ("must_hold", "if_late", "if_against", "expected_note", "variable_gap")]
+            parts += [str(r.get("say") or "") for r in link.get("rules") or [] if isinstance(r, dict)]
+    parts += [str(w.get("label") or "") for w in harness.get("wrong_if") or [] if isinstance(w, dict)]
+    return " \n".join(parts)
 
 
 class HarnessTools:
@@ -210,24 +230,29 @@ class HarnessTools:
             targets, awaiting = [record], []
         else:
             records, _ = store.all()
-            # A check nobody has read yet is not repeated, so a daily job does not resend the same alert.
+            # A check nobody has read yet is checked again against the old baseline, so its alert repeats
+            # until a person reads it instead of going quiet.
             awaiting = [r for r in records if isinstance(r.get("pending_baseline"), dict)]
-            targets = [r for r in records if r not in awaiting and is_due(r)]
+            targets = [r for r in records if r in awaiting or is_due(r)]
         mark_seen = seen and not self._in_cron()
         checked, blocks = [], []
         for record in targets:
             try:
                 result = self._run_check(store, record, mark_seen)
             except McpError as exc:
-                checked.append({"harness_id": record["id"], "ok": False, "error": exc.code, "message": exc.message})
+                checked.append({"harness_id": record["id"], "ok": False, "error": exc.code, "message": exc.message,
+                                "report": True})
                 blocks.append(f"**`{record['id']}`:** check failed ({exc.code}). {exc.message} Nothing was changed locally.")
                 continue
-            checked.append({"harness_id": record["id"], **self._check_payload(result), "baseline_saved": mark_seen})
+            report = needs_report(result)
+            # Nothing new to read: advancing the baseline loses nothing, so it does not wait for a person.
+            saved = mark_seen or not report
+            if saved and not mark_seen:
+                store.mark_seen(record["id"])
+            checked.append({"harness_id": record["id"], **self._check_payload(result), "baseline_saved": saved,
+                            "report": report})
             blocks.append(harness_format.format_check(result, harness_id=record["id"],
-                                                      title=str(record.get("title") or ""), seen=mark_seen))
-        if awaiting:
-            blocks.append("Still waiting for you to read the last check: " + ", ".join(
-                f"`{r['id']}` (`/el seen {r['id']}`)" for r in awaiting))
+                                                      title=str(record.get("title") or ""), seen=saved))
         if not blocks:
             blocks.append("No harness is due." if not harness_id else "Nothing to check.")
         needs = sum(len(c.get("needs_human") or []) for c in checked if c.get("ok", True))
@@ -239,7 +264,8 @@ class HarnessTools:
             "needs_human_total": needs,
             "variables_changed_total": moved,
             "errors": sum(1 for c in checked if c.get("ok") is False),
-            "awaiting_read": [r["id"] for r in awaiting],
+            "report_total": sum(1 for c in checked if c.get("report")),
+            "awaiting_read": [c["harness_id"] for c in checked if c.get("report") and not c.get("baseline_saved")],
             "markdown": "\n\n---\n\n".join(blocks),
         }
 
