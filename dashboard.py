@@ -195,7 +195,11 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                             "last_check": {"as_of": preview.get("as_of"), "rows": preview.get("rows") or [],
                                            "new_count": None, "next_due": "after you save"}})
         card = re.sub(r'<span class="tag[^"]*">[^<]*</span>', '<span class="tag">preview, not saved</span>', card, count=1)
-        body.append("<h2>Live now</h2>" + card)
+        actions = ('<div class="actions">'
+                   '<button type="button" data-hermes-send="Yes, follow these curated readings.">Follow these readings</button>'
+                   '<button type="button" class="ghost" data-hermes-send="I have my own view.">I have my own view</button>'
+                   '</div>')
+        body.append("<h2>Live now</h2>" + card + actions)
         for row in preview.get("rows") or []:
             sources += [a for a in row.get("attribution") or [] if a not in sources]
     if needs:
@@ -231,7 +235,7 @@ h3{{font-size:16px;margin:0}}.card{{background:var(--card);border:1px solid var(
 th{{font-size:12px;color:var(--muted);font-weight:600}}.num{{white-space:nowrap}}.dot{{color:var(--accent);margin-right:6px}}.spark{{color:var(--accent)}}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}}
 .s-seen{{color:var(--seen)}}.s-against{{color:var(--against)}}.s-late{{color:var(--late)}}.s-no_data,.s-not_due{{color:var(--nodata)}}
-.chain{{margin:10px 0 4px}}.steps{{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-top:6px}}.step{{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:140px;flex:1}}.step-name{{font-weight:600;font-size:13px;margin-bottom:6px}}.step-cos{{display:flex;flex-wrap:wrap;gap:4px}}.badge{{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--muted)}}tr.grp td{{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);padding:6px}}@media (max-width:640px){{.arrow{{display:none}}.step{{min-width:100%}}}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
+.chain{{margin:10px 0 4px}}.steps{{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-top:6px}}.step{{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:140px;flex:1}}.step-name{{font-weight:600;font-size:13px;margin-bottom:6px}}.step-cos{{display:flex;flex-wrap:wrap;gap:4px}}.badge{{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--muted)}}tr.grp td{{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);padding:6px}}@media (max-width:640px){{.arrow{{display:none}}.step{{min-width:100%}}}}.actions{{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}}.actions button{{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}}.actions button.ghost{{background:transparent;color:var(--accent)}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
 .tbl{{overflow-x:auto}}@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}td:first-child{{min-width:9em}}}}
 </style></head><body><main>
 {"".join(body)}

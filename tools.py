@@ -185,10 +185,10 @@ class EquityLayerTools(HarnessTools, WatchTools):
         return {
             "ok": True,
             "artifact_file": str(path),
-            # A MEDIA line makes Hermes clients show the file in the chat itself (Desktop renders it as a
-            # file card; messaging gateways send it as an attachment).
-            "markdown": (f"Your dashboard is ready: what you follow, what needs you, recent events and what is due "
-                         f"next, built on this machine.\n\nMEDIA:{path}"),
+            # Hermes Desktop renders a ::preview directive live inside the message, so the dashboard is
+            # in the chat itself rather than only under Artifacts.
+            "markdown": (f"Your dashboard: what you follow, what needs you, recent events and what is due next, "
+                         f"built on this machine.\n\n::preview{{file=\"{path}\" height=\"560\"}}"),
         }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:

@@ -13,7 +13,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 - **Most people answer "yes" to the recommended option. Make that path end well:** saying yes at every step ends with curated readings saved, checked once, scheduled daily and shown on the dashboard.
 - **One question per message.** Offer at most four numbered options, with one marked "(recommended)" and a one-line reason. Always accept the person's own words instead.
 - **Say what each question decides** in one or two plain sentences. Explain each term once, the first time it appears: CPO, ASIC, segment revenue, threshold, wrong_if, withheld.
-- **Show the dashboard with its `MEDIA:` line,** never as a bare file path, and don't paste source URLs into the chat: the dashboard keeps them.
+- **Show the dashboard with its `::preview{...}` line,** never as a bare file path, and don't paste source URLs into the chat: the dashboard keeps them.
 - **Use English** unless the person writes to you in another language, the profile's `language` says otherwise, or you remember from earlier chats that they write in another language. `/equitylayer:start`, a pasted prompt or the device's language does not set it. Keep source values, dates and identifiers exactly as returned. Do not show tool names or JSON.
 - **Introduce EquityLayer as you go,** in at most three short sentences across the whole setup, each where it fits, plain and with no superlatives:
   - before decision 1: EquityLayer makes your agent better at equity research: it checks company filings and exchange open data instead of guessing;
@@ -43,7 +43,7 @@ Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO
 
 A withheld value is no data: say why, and never guess it.
 
-Then call `el_dashboard_render` with `preview_variables` (up to eight candidates that cover different companies and chain steps, including those three) and `preview_title` ("<sector> live readings"). Copy its `MEDIA:` line exactly, on a line of its own, so the dashboard appears in the chat as a file they can open, and say nothing is saved until they say yes.
+Then call `el_dashboard_render` with `preview_variables` (up to eight candidates that cover different companies and chain steps, including those three) and `preview_title` ("<sector> live readings"). Copy its `::preview{...}` line exactly, on a line of its own, so the dashboard shows inside the chat, and say nothing is saved until they say yes. Its buttons send the decision 2 answer for them.
 
 **If the sector has no live readings yet** (the plan returns no candidates, as space does today), say so in one line and ask instead:
 1. Pick another sector (recommended).
@@ -79,7 +79,7 @@ On yes, call `el_harness_save`. If EquityLayer rejects a word, say so and sugges
 - For curated readings: `el_watch_check` with the watch id.
 - For a view: `el_harness_check` with the harness id.
 
-Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and copy its `MEDIA:` line exactly, on a line of its own: the dashboard now follows these readings; it is built on this machine and contacts no one.
+Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and copy its `::preview{...}` line exactly, on a line of its own: the dashboard now follows these readings; it is built on this machine and contacts no one.
 
 For a view, explain the statuses in one line:
 - 🟢 seen

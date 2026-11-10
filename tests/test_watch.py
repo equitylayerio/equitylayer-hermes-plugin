@@ -146,6 +146,7 @@ def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_
     result = json.loads(service.el_dashboard_render({"preview_variables": [FOCI], "preview_title": "CPO live readings"}))
     page = open(result["artifact_file"], encoding="utf-8").read()
     assert "Live now" in page and "CPO live readings" in page and "preview, not saved" in page
+    assert 'data-hermes-send="Yes, follow these curated readings."' in page and "<script" not in page
     assert "224,257" in page and "Open Government Data License" in page
     assert not (tmp_path / "watchlists").exists() and not (tmp_path / "profile.json").exists()
     assert transport.names() == ["get_variable"]
@@ -160,6 +161,7 @@ def test_chat_markdown_has_no_raw_links_and_dashboard_uses_media(make_service):
     assert "https://" not in check["markdown"] and "](" not in check["markdown"]
     assert "Full sources and links are on your dashboard." in check["markdown"]
     rendered = json.loads(service.el_dashboard_render({}))
-    assert f"MEDIA:{rendered['artifact_file']}" in rendered["markdown"]
+    path = rendered["artifact_file"]
+    assert '::preview{file="' + path + '" height="560"}' in rendered["markdown"]
     page = open(rendered["artifact_file"], encoding="utf-8").read()
     assert "https://data.gov.tw/license" in page  # full attribution stays on the dashboard
