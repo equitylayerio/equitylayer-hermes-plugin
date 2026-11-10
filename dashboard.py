@@ -21,8 +21,9 @@ from .watch_store import is_watch_due
 FILE_NAME = "dashboard.html"
 # Where each sector's public page lives; the dashboard links there as the way to EquityLayer's own research.
 SECTOR_PAGES = {
-    "optical_cpo": "https://equitylayer.io/themes/optical-cpo",
-    "space_infrastructure": "https://equitylayer.io/themes/space-infrastructure",
+    "optical_cpo": "https://equitylayer.io/sectors/cpo",
+    "custom_asic": "https://equitylayer.io/sectors/asic",
+    "space_infrastructure": "https://equitylayer.io/sectors/space",
     "physical_ai": "https://equitylayer.io/themes/physical-ai",
 }
 SITE = "https://equitylayer.io"
