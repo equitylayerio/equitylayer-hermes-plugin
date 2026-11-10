@@ -82,7 +82,10 @@ def _role_line(row: dict) -> str:
     if not company or not company.get("role"):
         return ""
     link = _https(company.get("source_url"))
-    source = f' <a href="{_e(link)}">source</a>' if link else ""
+    if link:
+        source = f' <a href="{_e(link)}">source</a>'
+    else:  # an issuer site that only serves plain HTTP: name it, don't link it
+        source = f' <span class="muted">(source: {_e(company.get("source_title") or company.get("source_url"))})</span>'
     return f'<div class="role">{_e(company["role"])}{source}</div>'
 
 

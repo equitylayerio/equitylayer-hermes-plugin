@@ -23,7 +23,8 @@ def _clean(entry: Any) -> dict | None:
     role, url, step = entry.get("role"), entry.get("source_url"), entry.get("step")
     if not (isinstance(role, str) and role.strip() and len(role) <= MAX_ROLE):
         return None
-    if not (isinstance(url, str) and url.startswith("https://") and len(url) < 500):
+    # Some issuers' own sites only serve plain HTTP; keep the source, but only https is linked.
+    if not (isinstance(url, str) and url.startswith(("https://", "http://")) and len(url) < 500):
         return None
     if not (isinstance(step, str) and 0 < len(step) <= 60):
         return None

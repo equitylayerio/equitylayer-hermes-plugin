@@ -17,7 +17,7 @@ def test_loader_keeps_only_well_formed_entries(tmp_path):
     path.write_text(json.dumps({"companies": {
         "3363.TWO": ROLE,
         "BAD": ROLE,                                            # entity id shape
-        "2455.TW": {**ROLE, "source_url": "http://x"},         # not https
+        "2455.TW": {**ROLE, "source_url": "ftp://x"},          # not a web source
         "3081.TWO": {**ROLE, "role": None},                    # no role
         "3163.TWO": {**ROLE, "role": "x" * 300},               # too long
     }}))

@@ -1,1 +1,161 @@
-{"checked_at": null, "companies": {}}
+{
+  "checked_at": "2026-11-10",
+  "companies": {
+    "LITE.US": {
+      "name": "Lumentum",
+      "sector": "optical_cpo",
+      "step": "Lasers and optical modules",
+      "step_order": 2,
+      "role": "Makes lasers, optical modules and subsystems for data-center links, telecom networks, industrial manufacturing and sensing, including networks behind AI.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "Lumentum - Investor Relations (overview)",
+      "source_url": "https://investor.lumentum.com/overview/default.aspx",
+      "source_date": "accessed 2026-11-10",
+      "note": "Proposed step: Lumentum describes itself as delivering lasers, modules and optical subsystems, so neither 'Laser and photodiode chips' nor 'Optical modules and transceivers' fits alone. Source mentions AI (networks behind AI); no CPO mention on this page."
+    },
+    "2455.TW": {
+      "name": "Visual Photonics Epitaxy (VPEC)",
+      "sector": "optical_cpo",
+      "step": "Epitaxy wafers",
+      "step_order": 1,
+      "role": "Grows compound-semiconductor epitaxial wafers, the base layers for wireless chips and for lasers and photodiodes used in fiber communications.",
+      "mentions_cpo_or_ai": false,
+      "source_title": "VPEC - About VPEC > Introduction (English site)",
+      "source_url": "http://www.vpec.com.tw/vpec/homeweb/homeweb_e/about.php?menu1=M100001&menu2=M200019&level=2",
+      "source_date": "accessed 2026-11-10",
+      "note": "Site serves HTTP only (HTTPS refused); fetched with curl. Intro text names HBT, PHEMT, PIN diode and solar-cell epi wafers for wireless and optical fiber communications; the English product menu (homeweb_e/index_frame.php) lists PD, APD, F-P LD, DFB LD and VCSEL epi wafers. Page footer copyright 2010. No CPO or AI mention."
+    },
+    "3081.TWO": {
+      "name": "LandMark Optoelectronics",
+      "sector": "optical_cpo",
+      "step": "Epitaxy wafers",
+      "step_order": 1,
+      "role": "Makes gallium-arsenide and indium-phosphide epitaxial wafers, the base material for optical-communication chips, and supplies silicon-photonics components.",
+      "mentions_cpo_or_ai": false,
+      "source_title": "Overview - LandMark Optoelectronics Corporation (English)",
+      "source_url": "https://www.lmoc.com.tw/./index.php?temp=intro&lang=en",
+      "source_date": "accessed 2026-11-10",
+      "note": "Company calls itself a GaAs/InP epi-wafer manufacturer and an epitaxy house; also says it supplies Si-photonics components. 'Data center' appears only as a product-menu label; 'AI & IoT' appears only as homepage banner alt text, so mentions_cpo_or_ai kept false."
+    },
+    "3163.TWO": {
+      "name": "Browave",
+      "sector": "optical_cpo",
+      "step": "Passive optics and fiber arrays",
+      "step_order": 3,
+      "role": "Makes passive optical parts such as wavelength filters, splitters, fiber arrays and cables, and is developing fiber-routing products for co-packaged optics.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "Browave Corporation 2025 Annual Report (English summary translation), Business Overview and Business Plan for 2026",
+      "source_url": "https://www.browave.com/uploads/images/2025%20Annual%20Report.pdf",
+      "source_date": "2026-04-30",
+      "note": "Business scope: optical communication passive components, modules and subsystems (WDM, branch incl. fiber arrays, AMP, OIN cables/AOC). CPO wording is development/collaboration (fiber distribution boxes for CPO platforms, Optical I/O solutions); the report's product-sales table has no CPO line, so no CPO revenue is implied. Also opened English profile https://www.browave.com/Pages/67."
+    },
+    "3363.TWO": {
+      "name": "FOCI Fiber Optic Communications",
+      "sector": "optical_cpo",
+      "step": "Passive optics and fiber arrays",
+      "step_order": 3,
+      "role": "Designs and makes fiber-optic components and modules, including fiber arrays for silicon-photonics chips, custom transceivers and co-packaged optics systems.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "About FOCI - Company Profile (English)",
+      "source_url": "https://www.foci.com.tw/en-gb/information/1",
+      "source_date": "accessed 2026-11-10",
+      "note": "Profile lists 'Co-packaged optics systems' among its total solutions for new product design; no CPO revenue stated. 'FA solutions for SiPh Chip' is from the Passive Optical Products page https://www.foci.com.tw/en-gb/product-category/2. FOCI also has an active optical product line. No AI mention."
+    },
+    "4971.TWO": {
+      "name": "IntelliEPI",
+      "sector": "optical_cpo",
+      "step": "Epitaxy wafers",
+      "step_order": 1,
+      "role": "Grows compound-semiconductor epitaxial wafers by molecular-beam epitaxy for wireless, infrared and optical chips such as lasers, VCSELs and photodiodes.",
+      "mentions_cpo_or_ai": false,
+      "source_title": "Products | IntelliEPI",
+      "source_url": "https://intelliepi.com/products/",
+      "source_date": "accessed 2026-11-10",
+      "note": "Optoelectronics category lists APD, lasers, VCSEL, PIN, QWIP, modulators and quantum cascade lasers; says laser wafers serve fiber-optic communications. Also opened https://intelliepi.com/about/. No CPO or AI mention."
+    },
+    "4977.TW": {
+      "name": "PCL Technologies",
+      "sector": "optical_cpo",
+      "step": "Optical modules and transceivers",
+      "step_order": 4,
+      "role": "Makes optical transceivers plus the optical components and modules inside them for data-communications, telecom, cloud-computing and networking customers.",
+      "mentions_cpo_or_ai": false,
+      "source_title": "PCL Technologies Group - Group Profile",
+      "source_url": "http://www.pcltech.com/01-1.htm",
+      "source_date": "accessed 2026-11-10",
+      "note": "Site serves HTTP only; fetched with curl. Also opened home page http://www.pcltech.com/00-1.htm (engineering and manufacturing services for optical and electro-mechanical components and modules). Site footer is copyright 2013, so the description may be dated; product specs listed there (up to 10G) are old. No CPO or AI mention."
+    },
+    "CIEN.US": {
+      "name": "Ciena",
+      "sector": "optical_cpo",
+      "step": "Optical networking systems",
+      "step_order": 6,
+      "role": "Builds high-speed networking systems, interconnects, automation software and services that carry growing bandwidth demand, including for AI-era customers.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "Ciena Corporation - Investor Relations (overview)",
+      "source_url": "https://investor.ciena.com/overview/default.aspx",
+      "source_date": "accessed 2026-11-10",
+      "note": "AI mention is the phrase about helping customers thrive in the AI era; no CPO mention."
+    },
+    "COHR.US": {
+      "name": "Coherent",
+      "sector": "optical_cpo",
+      "step": "Optical modules and transceivers",
+      "step_order": 4,
+      "role": "Makes lasers, optical transceivers and related materials for data centers, communications and industry, including transceivers for AI data centers.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "Coherent Corp. Form 10-K for fiscal year ended 2026-06-30, Item 1 Business",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/0000820318/000082031826000020/iivi-20260630.htm",
+      "source_date": "accessed 2026-11-10",
+      "note": "10-K says Coherent is vertically integrated (lasers, transceivers, materials) and names CPO among advanced optical technologies supporting AI datacenter architectures; no CPO revenue stated. Filing date not shown in the excerpt read (share count dated 2026-08-10). Also opened https://www.coherent.com/company. ir.coherent.com returned 403."
+    },
+    "FN.US": {
+      "name": "Fabrinet",
+      "sector": "optical_cpo",
+      "step": "Contract manufacturing",
+      "step_order": 5,
+      "role": "Contract manufacturer providing optical packaging and precision optical, electronic and electro-mechanical manufacturing for equipment makers, notably optical-communication components.",
+      "mentions_cpo_or_ai": false,
+      "source_title": "Fabrinet Form 10-K for fiscal year ended 2026-06-26, Item 1 Business (Overview)",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/0001408710/000140871026000028/fn-20260626.htm",
+      "source_date": "accessed 2026-11-10",
+      "note": "Item 1 overview does not mention CPO or AI; only the first part of the filing was read. Also opened https://www.fabrinet.com/ (no CPO/AI mention). investor.fabrinet.com returned 403."
+    },
+    "2454.TW": {
+      "name": "MediaTek",
+      "sector": "asic",
+      "step": "Chip design (SoCs and custom ASICs)",
+      "step_order": 2,
+      "role": "Designs chips for phones, home entertainment, connectivity and IoT, and builds custom ASICs for cloud data centers tailored to AI companies.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "MediaTek ASIC Solutions - Custom, High-Performance Integrated Circuits",
+      "source_url": "https://www.mediatek.com/asic",
+      "source_date": "accessed 2026-11-10",
+      "note": "Proposed step: MediaTek is mainly an own-brand SoC designer that also offers custom ASICs; its ASIC page says data-center ASICs are tailored for AI, hyperscale, data center and networking companies but does not use the term 'AI accelerator', so 'Chip design (custom AI accelerators)' was not used. Consumer-chip part of the role from https://www.mediatek.com/company/discover."
+    },
+    "3443.TW": {
+      "name": "Global Unichip (GUC)",
+      "sector": "asic",
+      "step": "ASIC design services",
+      "step_order": 1,
+      "role": "Provides custom chip (ASIC) design and production services, turning customers' designs into manufactured chips, specializing in AI and HPC chips.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "GUC (Global Unichip Corp.) English home page",
+      "source_url": "https://www.guc-asic.com/en-global",
+      "source_date": "accessed 2026-11-10",
+      "note": "Self-described 'advanced ASIC leader' with ASIC design service, ASIC production service and IP portfolio; AI/HPC section says it specializes in designing AI and HPC chips. A 2026-01-28 press release title announces a Lightmatter partnership to produce CPO solutions for AI hyperscalers; no CPO revenue stated, so CPO left out of the role."
+    },
+    "3661.TW": {
+      "name": "Alchip",
+      "sector": "asic",
+      "step": "ASIC design services",
+      "step_order": 1,
+      "role": "Provides custom chip (ASIC) design and manufacturing services, including advanced packaging, with AI and high-performance computing among its focused markets.",
+      "mentions_cpo_or_ai": true,
+      "source_title": "Company - Alchip",
+      "source_url": "https://www.alchip.com/en/About_Alchip/company",
+      "source_date": "accessed 2026-11-10",
+      "note": "Describes itself as a provider of silicon design and manufacturing services, incl. 2.5D/3DIC and CoWoS/chiplet design and manufacturing management; focused markets include AI and HPC. No CPO mention on this page."
+    }
+  }
+}
