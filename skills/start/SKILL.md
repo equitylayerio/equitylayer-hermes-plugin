@@ -24,19 +24,25 @@ Call `el_profile_get` and `el_list_registry`.
   2. Check everything now.
   3. Add a sector or a view.
   Skip any decision already answered.
-- If the registry lists a Research Pack, add "Follow EquityLayer's published Pack" to decision 1 for its sector, and use the `equitylayer:equitylayer-research` skill if they pick it.
+- If the registry lists a Research Pack, note it inside the matching sector option ("CPO and optical networking: EquityLayer Pack available"), so decision 1 keeps four options. If they pick that sector, offer the Pack as the first way to follow it in decision 2 and use the `equitylayer:equitylayer-research` skill.
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
 
 Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO recommended. Gloss the one they pick.
 
-**Before decision 2, show what is live.** Call `el_plan_thesis` with the sector name as the thesis text and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Show each in one plain line:
+**Before decision 2, show what is live.** Call `el_plan_thesis` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Show each in one plain line:
 - the latest reading and its period;
 - what it shows;
 - what it cannot show (the caveat).
 
 A withheld value is no data: say why, and never guess it.
+
+**If the sector has no live readings yet** (the plan returns no candidates, as space does today), say so in one line and ask instead:
+1. Pick another sector (recommended).
+2. Write my view anyway; it will show gaps until readings arrive.
+3. Stop for now.
+Save the sector to the profile either way, so a later visit can check again.
 
 ## Decision 2. How do you want to follow it?
 
@@ -57,7 +63,7 @@ A view takes a stand and could be wrong.
 **For a view:** call `el_plan_thesis` with their view, the theme and any companies they named. Call `el_get_variable` on each variable you propose. Show one card:
 - hypothesis (their words), why, and the companies it covers;
 - three to five variables, one plain line each with its caveat; name the gaps;
-- thresholds around the latest levels that cover the whole range (weakens / no material change / strengthens), each marked "your judgment, change any";
+- thresholds around the latest levels that cover the whole range (weakens / no material change / strengthens), each marked "suggested, your call";
 - wrong_if: one numeric condition counted `from` today, and one that only they can judge, with a date to check by.
 
 On yes, call `el_harness_save`. If EquityLayer rejects a word, say so and suggest new wording; "buy" is refused as trade language, so use "procure".
@@ -81,6 +87,7 @@ Show the markdown as returned. For a view, explain the statuses in one line:
 4. Not read yet.
 
 For 1 to 3, mark the check as read: `el_watch_seen` or `el_harness_seen`.
+For 4, mark nothing and schedule nothing. Say they can say "I've read it" any time, and ask about frequency then.
 
 For 1 or 2, create one job with the `cronjob` tool, so results come back to this chat:
 - `action`: `create`
@@ -96,7 +103,7 @@ Call el_harness_check with no arguments, then el_watch_check with no arguments, 
 ```
 
 - Do not run the job now.
-- Check `cronjob` `list` first. If an EquityLayer check already exists, keep that one job: it covers every watchlist and thesis.
+- Check `cronjob` `list` first. If any job's name starts with "EquityLayer", do not add a second one: `update` that job with the schedule, timezone, skills and the exact prompt above, because older jobs carry an older prompt that skips watchlists. If several exist, update one and tell the person the others' names so they can remove them.
 - If the `cronjob` tool is not available, show the line from `/el schedule`.
 
 ## Remember and close

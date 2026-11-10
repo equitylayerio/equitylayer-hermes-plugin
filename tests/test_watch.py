@@ -99,3 +99,43 @@ def test_slash_watch_commands(make_service):
     assert "Saved as read." in handle("watch-check cpo-curated-readings")
     assert "dashboard.html" in handle("dashboard")
     assert "Removed" in handle("unwatch cpo-curated-readings")
+
+
+def test_one_failing_reading_does_not_stop_the_check(make_service, tmp_path):
+    from equitylayer_plugin.watch_store import WatchStore
+
+    service, _, _ = make_service(ROUTES)
+    WatchStore(tmp_path).save("mixed", "Mixed", [FOCI, "v:9999.tw.revenue.monthly"], "optical_cpo")
+    import equitylayer_plugin.mcp_client as mc
+    real = service._call
+
+    def flaky(tool, arguments):
+        if arguments.get("variable") == "v:9999.tw.revenue.monthly":
+            raise mc.McpError("unknown_variable", "not a shared variable")
+        return real(tool, arguments)
+
+    service._call = flaky
+    result = json.loads(service.el_watch_check({}))
+    assert result["ok"] and result["report_total"] == 1
+    assert "unavailable (unknown_variable)" in result["markdown"] and "224,257" in result["markdown"]
+    assert (tmp_path / "dashboard.html").exists()
+
+
+def test_change_only_between_adjacent_discrete_periods():
+    from equitylayer_plugin.watch_tools import _change
+
+    a = {"period": "2026-09", "value": 110}
+    assert _change(a, {"period": "2026-08", "value": 100}) == "+10.0% vs 2026-08"
+    assert _change(a, {"period": "2026-07", "value": 100}) == ""  # a month is missing
+    assert _change({"period": "2026-Q2", "value": 111}, {"period": "2025-Q4", "value": 100}, "ytd") == ""
+    assert _change({"period": "2026-Q2", "value": 111}, {"period": "2025-Q4", "value": 100}) == ""  # not adjacent
+    assert _change({"period": "FY2027-Q1", "value": 120}, {"period": "FY2026-Q4", "value": 100}) == "+20.0% vs FY2026-Q4"
+    assert _change({"period": "2026-Q1", "value": 1}, {"period": "FY2025-Q4", "value": 1}) == ""  # fiscal vs calendar
+
+
+def test_profile_counts_a_watchlist_as_returning(make_service):
+    service, _, _ = make_service(ROUTES)
+    _save(service)
+    got = json.loads(service.el_profile_get({}))
+    assert got["returning"] is True and got["saved_watchlists"][0]["id"] == "cpo-curated-readings"
+    assert "Following: 1 watchlist(s)" in got["markdown"]

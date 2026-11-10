@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -23,7 +24,33 @@ def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def _change(latest: dict | None, previous: dict | None) -> str:
+PERIOD_RE = re.compile(r"^(FY)?(\d{4})(?:-(Q[1-4]|\d{2}))?$")
+
+
+def _period_index(period: Any) -> tuple[str, int] | None:
+    """('M', months) / ('Q', quarters) / ('Y', years) for YYYY-MM, [FY]YYYY-Qn and [FY]YYYY periods."""
+    match = PERIOD_RE.match(str(period or ""))
+    if not match:
+        return None
+    fiscal, year, part = match.group(1) or "", int(match.group(2)), match.group(3)
+    if part is None:
+        return (fiscal + "Y", year)
+    if part.startswith("Q"):
+        return (fiscal + "Q", year * 4 + int(part[1]) - 1)
+    return ("M", year * 12 + int(part) - 1)
+
+
+def _adjacent(previous: Any, latest: Any) -> bool:
+    a, b = _period_index(previous), _period_index(latest)
+    return bool(a and b and a[0] == b[0] and b[1] - a[1] == 1)
+
+
+def _change(latest: dict | None, previous: dict | None, period_basis: Any = "discrete") -> str:
+    """Year-to-date figures and periods that do not follow on are never compared."""
+    if period_basis not in (None, "discrete"):
+        return ""
+    if not _adjacent((previous or {}).get("period"), (latest or {}).get("period")):
+        return ""
     a, b = _number((latest or {}).get("value")), _number((previous or {}).get("value"))
     if a is None or b is None or b == 0:
         return ""
@@ -36,9 +63,11 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
     previous = readings[-2] if len(readings) > 1 else None
     withheld = bool(latest and latest.get("withheld"))
     period = latest.get("period") if latest else None
+    discrete = data.get("period_basis") in (None, "discrete")
     return {
         "variable": variable,
         "name": data.get("name") or variable,
+        "period_basis": data.get("period_basis"),
         "entity": data.get("entity"),
         "unit": data.get("unit"),
         "cadence": data.get("cadence"),
@@ -47,12 +76,19 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
         "latest": {"period": period, "value": None if withheld else (latest or {}).get("value"),
                    "withheld": (latest or {}).get("withheld")} if latest else None,
         "previous": {"period": previous.get("period"), "value": previous.get("value")} if previous else None,
-        "change": "" if withheld else _change(latest, previous),
-        "recent": [r.get("value") for r in readings if _number(r.get("value")) is not None][-RECENT_VALUES:],
+        "change": "" if withheld else _change(latest, previous, data.get("period_basis")),
+        "recent": [r.get("value") for r in readings if _number(r.get("value")) is not None][-RECENT_VALUES:]
+        if discrete else [],
         "new": bool(period) and not withheld and period != seen_period,
         "source_url": (latest or {}).get("source_url") or (data.get("source") or {}).get("url"),
         "attribution": [a for a in data.get("attribution") or [] if isinstance(a, str)],
     }
+
+
+def _unavailable_row(variable: str, error: McpError) -> dict:
+    return {"variable": variable, "name": variable, "unit": None, "caveat": None, "next_reading": None,
+            "latest": None, "previous": None, "change": "", "recent": [], "new": False, "attribution": [],
+            "error": error.code}
 
 
 def format_watch(record: dict, check: dict, *, seen: bool) -> str:
@@ -62,7 +98,8 @@ def format_watch(record: dict, check: dict, *, seen: bool) -> str:
     table = _table(
         ["", "reading", "latest", "change", "what it can't show"],
         [["●" if r.get("new") else "", r.get("name"),
-          (f"{r['latest']['period']}: withheld ({str(r['latest']['withheld']).replace('_', ' ')})"
+          (f"unavailable ({r['error']})" if r.get("error") else
+           f"{r['latest']['period']}: withheld ({str(r['latest']['withheld']).replace('_', ' ')})"
            if r.get("latest") and r["latest"].get("withheld")
            else f"{(r.get('latest') or {}).get('period') or '—'}: {_value((r.get('latest') or {}).get('value'), r.get('unit'))}"),
           r.get("change") or "", r.get("caveat") or ""] for r in rows],
@@ -157,10 +194,15 @@ class WatchTools:
     def _run_watch(self, store: WatchStore, record: dict, mark_seen: bool) -> dict:
         seen = record.get("seen") if isinstance(record.get("seen"), dict) else None
         periods = (seen or {}).get("periods") or {}
-        rows = [_row(v, self._call("get_variable", {"variable": v}), periods.get(v)) for v in record["variables"]]
+        rows = []
+        for variable in record["variables"]:
+            try:
+                rows.append(_row(variable, self._call("get_variable", {"variable": variable}), periods.get(variable)))
+            except McpError as exc:
+                rows.append(_unavailable_row(variable, exc))
         names = {r["variable"]: r["name"] for r in rows}
         today = today_taipei()
-        since = (seen or {}).get("as_of") or (datetime.now(TAIPEI).date() - timedelta(days=EVENT_LOOKBACK_DAYS)).isoformat()
+        since = (datetime.now(TAIPEI).date() - timedelta(days=EVENT_LOOKBACK_DAYS)).isoformat()
         events = self._events_for(record["variables"], since)
         seen_events = set((seen or {}).get("events") or [])
         events_new = [e for e in events if e["id"] not in seen_events]
@@ -175,7 +217,8 @@ class WatchTools:
             "next_due": next_due_from(rows),
         }
         report = check["first_check"] or check["new_count"] > 0 or check["events_new"] > 0
-        snapshot = {"as_of": today, "periods": {r["variable"]: (r.get("latest") or {}).get("period") for r in rows},
+        snapshot = {"as_of": today, "periods": {r["variable"]: (r.get("latest") or {}).get("period") or periods.get(r["variable"])
+                                               for r in rows},
                     "events": [e["id"] for e in events]}
         saved = mark_seen or not report  # nothing new advances on its own
         store.record_check(record["id"], check, snapshot, seen=saved)
@@ -195,14 +238,23 @@ class WatchTools:
             records, _ = store.all()
             targets = [r for r in records if isinstance(r.get("pending"), dict) or is_watch_due(r)]
         mark_seen = seen and not self._in_cron()
-        checked = [self._run_watch(store, r, mark_seen) for r in targets]
-        blocks = [c["markdown"] for c in checked if c["report"] or watch_id]
+        checked = []
+        for record in targets:
+            try:
+                checked.append(self._run_watch(store, record, mark_seen))
+            except Exception as exc:  # noqa: BLE001 - one watchlist must not stop the others
+                logger.warning("EquityLayer watchlist %s not checked", record.get("id"), exc_info=True)
+                checked.append({"watch_id": record.get("id"), "ok": False, "report": False, "baseline_saved": False,
+                                "markdown": f"Watchlist `{record.get('id')}` could not be checked: "
+                                            f"{getattr(exc, 'code', type(exc).__name__)}. It will be tried again."})
+        blocks = [c["markdown"] for c in checked if c["report"] or watch_id or c.get("ok") is False]
         self._refresh_dashboard()
         return {
             "ok": True,
             "mode": "single" if watch_id else "due",
             "checked": [c["watch_id"] for c in checked],
             "report_total": sum(1 for c in checked if c["report"]),
+            "errors": sum(1 for c in checked if c.get("ok") is False),
             "awaiting_read": [c["watch_id"] for c in checked if c["report"] and not c["baseline_saved"]],
             "markdown": "\n\n---\n\n".join(blocks) if blocks else "No watchlist has anything new.",
         }

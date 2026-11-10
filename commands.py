@@ -10,7 +10,7 @@ from .tools import EquityLayerTools
 HARNESS_SKILL = "equitylayer:equitylayer-thesis-harness"
 RESEARCH_SKILL = "equitylayer:equitylayer-research"
 
-THESIS_CRON_NAME = "EquityLayer thesis check"
+THESIS_CRON_NAME = "EquityLayer daily check"
 THESIS_CRON_PROMPT = (
     "Call el_harness_check with no arguments, then el_watch_check with no arguments, to check the user's saved "
     "EquityLayer theses and watchlists that are due. If report_total is 0 in both, respond with only [SILENT]. "
@@ -244,7 +244,7 @@ def register_blueprints(ctx: Any) -> None:
     ctx.register_automation_blueprint(
         "thesis-check",
         title=THESIS_CRON_NAME,
-        description="Every day, check your saved thesis harnesses that are due. Silent unless something moved or needs you.",
+        description="Every day, check your saved watchlists and theses that are due. Silent unless something is new or needs you.",
         category="research",
         schedule_template="{minute} {hour} * * *",
         prompt_template=THESIS_CRON_PROMPT,

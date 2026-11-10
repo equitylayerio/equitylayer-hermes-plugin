@@ -501,16 +501,20 @@ class EquityLayerTools(HarnessTools, WatchTools):
     def _profile_get(self, args: dict) -> dict:
         profile = self._profile_store_factory().get()
         harnesses, _ = self._harness_store_factory().all()
+        watchlists, _ = self._watch_store_factory().all()
         about = describe(profile)
         lines = ["**Your EquityLayer research profile** (this machine only)", ""]
         lines.append(f"- {about[0].upper() + about[1:]}." if about else "- Not set up yet. Type `/equitylayer:start`.")
+        lines.append(f"- Following: {len(watchlists)} watchlist(s)" + (" (`/el watches`)" if watchlists else ""))
         lines.append(f"- Saved theses: {len(harnesses)}" + (" (`/el theses`)" if harnesses else ""))
         return {
             "ok": True,
             "markdown": "\n".join(lines),
             "profile": profile,
-            "returning": bool(profile or harnesses),
+            "returning": bool(profile or harnesses or watchlists),
             "saved_harnesses": [{"id": r.get("id"), "title": r.get("title")} for r in harnesses][:15],
+            "saved_watchlists": [{"id": r.get("id"), "title": r.get("title"), "variables": r.get("variables")}
+                                 for r in watchlists][:10],
             "sectors": [dict(s) for s in SECTORS],
             "stored": "local only; never sent to EquityLayer",
         }

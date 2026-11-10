@@ -1,6 +1,6 @@
 [project]
 name = "equitylayer-hermes-plugin"
-version = "0.3.0"
+version = "0.4.0"
 description = "EquityLayer research for Hermes Agent"
 requires-python = ">=3.11"
 license = { text = "MIT" }
