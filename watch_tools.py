@@ -68,6 +68,7 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
         "variable": variable,
         "name": data.get("name") or variable,
         "period_basis": data.get("period_basis"),
+        "chain_position": data.get("chain_position"),
         "entity": data.get("entity"),
         "unit": data.get("unit"),
         "cadence": data.get("cadence"),
@@ -111,7 +112,7 @@ def format_watch(record: dict, check: dict, *, seen: bool) -> str:
     else:
         lead = "Nothing new since you last read."
     events = _bullets(
-        f"{e.get('at')} · {e.get('title')}" + (f" ([source]({e['url']}))" if e.get("url") else "")
+        f"{e.get('at')} · {e.get('title')}"
         for e in check.get("events") or []
     )
     upcoming = _bullets(f"{u.get('date')} · {u.get('names')}: {u.get('reason')}" for u in check.get("upcoming") or [])
@@ -125,6 +126,7 @@ def format_watch(record: dict, check: dict, *, seen: bool) -> str:
         _section("Recent events", events) if events else "",
         _section("Coming up", upcoming) if upcoming else "",
         _section("Sources", _bullets(_attributions(r.get("attribution") for r in rows))),
+        "Full sources and links are on your dashboard.",
         read_line if (first or new_rows or check.get("events_new")) else "",
         BOUNDARY,
     )

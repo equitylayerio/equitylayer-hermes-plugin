@@ -39,7 +39,8 @@ def test_check_shows_status_needs_you_caveats_and_sources():
     assert "FY2027-Q1: withheld (source rights review)" in text
     assert ">= 220000 → strengthens" in text
     assert "Open Government Data License" in text
-    assert "Coherent Datacenter & Communications segment revenue: https://www.sec.gov/" in text
+    assert "Coherent Datacenter & Communications segment revenue: www.sec.gov/" in text
+    assert "https://" not in text  # chat shows sources as plain text; the dashboard keeps the links
     assert "Not saved as your baseline yet" in text and "/el seen cpo" in text
     assert "next due 2026-11-10 (variable reading, v:3363.two.revenue.monthly)" in text
     assert _no_trade_advice(text)

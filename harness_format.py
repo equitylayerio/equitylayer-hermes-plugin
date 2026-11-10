@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable
 
 from .formatters import _bullets, _join, _section, _table, _thousands
@@ -43,12 +44,18 @@ def _reading(latest: Any, unit: Any = None) -> str:
     return f"{latest.get('period')}: {_value(latest.get('value'), unit)}"
 
 
+def unlink(text: str) -> str:
+    """Show a URL as plain text in chat (no scheme), so chat clients do not turn every source into a link
+    or an artifact. The dashboard keeps the full links."""
+    return re.sub(r"https?://", "", text)
+
+
 def _attributions(items: Iterable[Any]) -> list[str]:
     seen: list[str] = []
     for item in items:
         for text in item or []:
-            if isinstance(text, str) and text not in seen:
-                seen.append(text)
+            if isinstance(text, str) and unlink(text) not in seen:
+                seen.append(unlink(text))
     return seen
 
 
@@ -238,7 +245,7 @@ def format_check(result: dict, *, harness_id: str = "", title: str = "", seen: b
     for v in variables:
         latest = v.get("latest") if isinstance(v.get("latest"), dict) else {}
         if not v.get("attribution") and latest.get("source_url"):
-            line = f"{v.get('name') or v.get('variable')}: {latest['source_url']}"
+            line = f"{v.get('name') or v.get('variable')}: {unlink(str(latest['source_url']))}"
             if line not in sources:
                 sources.append(line)
     due = result.get("next_due")

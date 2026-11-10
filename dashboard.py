@@ -51,6 +51,43 @@ def _spark(values: list[Any]) -> str:
             f'<polyline points="{points}" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>')
 
 
+STEP_ORDER = ("material", "component", "optical_component", "optical_engine", "optical_module", "module",
+              "package", "packaging", "chip", "switch", "system", "server", "network", "datacenter")
+
+
+def _step_label(position: Any) -> str:
+    """'network.optical_component' -> 'Optical component'. Only the catalog's own field, no added roles."""
+    last = str(position or "").split(".")[-1].replace("_", " ").strip()
+    return last[:1].upper() + last[1:] if last else "Other"
+
+
+def _step_key(position: Any) -> tuple:
+    last = str(position or "").split(".")[-1]
+    return (STEP_ORDER.index(last) if last in STEP_ORDER else len(STEP_ORDER), last)
+
+
+def _company(row: dict) -> str:
+    name = str(row.get("name") or row.get("variable") or "")
+    return (name.split(" (")[0] if " (" in name else name.split(" ")[0]).strip() or str(row.get("entity") or "")
+
+
+def _chain_strip(rows: list[dict]) -> str:
+    steps: dict[str, list[str]] = {}
+    for row in sorted(rows, key=lambda r: _step_key(r.get("chain_position"))):
+        names = steps.setdefault(_step_label(row.get("chain_position")), [])
+        if _company(row) not in names:
+            names.append(_company(row))
+    if len(steps) < 1 or all(k == "Other" for k in steps):
+        return ""
+    boxes = '<span class="arrow" aria-hidden="true">→</span>'.join(
+        f'<div class="step"><div class="step-name">{_e(step)}</div>'
+        f'<div class="step-cos">{"".join(f"<span class=badge>{_e(n)}</span>" for n in names)}</div></div>'
+        for step, names in steps.items())
+    companies = len({_company(r) for r in rows})
+    return (f'<div class="chain"><div class="muted small">Supply chain covered: {companies} companies, '
+            f'{len(steps)} step(s)</div><div class="steps">{boxes}</div></div>')
+
+
 def _watch_card(record: dict) -> str:
     last = record.get("last_check") if isinstance(record.get("last_check"), dict) else None
     unread = isinstance(record.get("pending"), dict)
@@ -59,7 +96,14 @@ def _watch_card(record: dict) -> str:
     if not last:
         return f'<section class="card">{head}<p class="muted">Not checked yet. Ask Hermes to check this watchlist.</p></section>'
     rows = []
-    for r in last.get("rows") or []:
+    previous_step = None
+    ordered = sorted(last.get("rows") or [], key=lambda r: _step_key(r.get("chain_position")))
+    grouped = any(r.get("chain_position") for r in ordered)
+    for r in ordered:
+        step = _step_label(r.get("chain_position"))
+        if grouped and step != previous_step:
+            rows.append(f'<tr class="grp"><td colspan="5">{_e(step)}</td></tr>')
+            previous_step = step
         latest = r.get("latest") or {}
         reading = (f'withheld ({_e(str(latest.get("withheld")).replace("_", " "))})' if latest.get("withheld")
                    else f'{_num(latest.get("value"))} <span class="unit">{_e(r.get("unit"))}</span>')
@@ -74,7 +118,7 @@ def _watch_card(record: dict) -> str:
     new = last.get("new_count", 0)
     new_part = f" · {_e(new)} new" if new is not None else ""
     return (f'<section class="card">{head}<p class="muted">Checked {_e(last.get("as_of"))}{new_part} · '
-            f'next check {_e(last.get("next_due"))}</p>{table}</section>')
+            f'next check {_e(last.get("next_due"))}</p>{_chain_strip(ordered)}{table}</section>')
 
 
 def _thesis_card(record: dict) -> str:
@@ -187,7 +231,7 @@ h3{{font-size:16px;margin:0}}.card{{background:var(--card);border:1px solid var(
 th{{font-size:12px;color:var(--muted);font-weight:600}}.num{{white-space:nowrap}}.dot{{color:var(--accent);margin-right:6px}}.spark{{color:var(--accent)}}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}}
 .s-seen{{color:var(--seen)}}.s-against{{color:var(--against)}}.s-late{{color:var(--late)}}.s-no_data,.s-not_due{{color:var(--nodata)}}
-.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
+.chain{{margin:10px 0 4px}}.steps{{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-top:6px}}.step{{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:140px;flex:1}}.step-name{{font-weight:600;font-size:13px;margin-bottom:6px}}.step-cos{{display:flex;flex-wrap:wrap;gap:4px}}.badge{{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--muted)}}tr.grp td{{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);padding:6px}}@media (max-width:640px){{.arrow{{display:none}}.step{{min-width:100%}}}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
 .tbl{{overflow-x:auto}}@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}td:first-child{{min-width:9em}}}}
 </style></head><body><main>
 {"".join(body)}

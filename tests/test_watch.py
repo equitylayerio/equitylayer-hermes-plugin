@@ -151,3 +151,15 @@ def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_
     assert transport.names() == ["get_variable"]
     plain = json.loads(service.el_dashboard_render({}))
     assert "Live now" not in open(plain["artifact_file"], encoding="utf-8").read()
+
+
+def test_chat_markdown_has_no_raw_links_and_dashboard_uses_media(make_service):
+    service, _, _ = make_service(ROUTES)
+    _save(service)
+    check = json.loads(service.el_watch_check({}))
+    assert "https://" not in check["markdown"] and "](" not in check["markdown"]
+    assert "Full sources and links are on your dashboard." in check["markdown"]
+    rendered = json.loads(service.el_dashboard_render({}))
+    assert f"MEDIA:{rendered['artifact_file']}" in rendered["markdown"]
+    page = open(rendered["artifact_file"], encoding="utf-8").read()
+    assert "https://data.gov.tw/license" in page  # full attribution stays on the dashboard

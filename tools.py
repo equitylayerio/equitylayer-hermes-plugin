@@ -185,9 +185,10 @@ class EquityLayerTools(HarnessTools, WatchTools):
         return {
             "ok": True,
             "artifact_file": str(path),
-            "markdown": (f"Dashboard updated: `{path}`\n\nIt shows what you follow, your theses, what needs you, "
-                         "recent events and what is due next, from the files on this machine. Open it from Artifacts "
-                         "in Hermes Desktop, or in any browser. It contacts no one."),
+            # A MEDIA line makes Hermes clients show the file in the chat itself (Desktop renders it as a
+            # file card; messaging gateways send it as an attachment).
+            "markdown": (f"Your dashboard is ready: what you follow, what needs you, recent events and what is due "
+                         f"next, built on this machine.\n\nMEDIA:{path}"),
         }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:
