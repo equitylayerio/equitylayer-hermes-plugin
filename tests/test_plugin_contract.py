@@ -102,3 +102,19 @@ def test_start_skill_offers_the_websites_sectors_in_order():
                    "On yes, call `el_watch_save`", "On yes, call `el_harness_save`", "el_dashboard_render",
                    "Before decision 2, show what is live"):
         assert phrase in text
+
+
+def test_start_skill_defaults_to_english_and_introduces_equitylayer_briefly():
+    text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    assert "**Use English** unless the person writes to you in another language" in text
+    assert "or the device's language does not set it" in text
+    assert "in at most three short sentences across the whole setup" in text
+    assert "EquityLayer is the fundamental research layer for AI agents" in text
+    assert "no superlatives" in text
+
+
+def test_dashboard_is_offered_right_after_the_first_check():
+    text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    first_check = text.index("**Then check once:**")
+    offer = text.index("Then call `el_dashboard_render` and add one line")
+    assert first_check < offer < text.index("## Decision 4.")
