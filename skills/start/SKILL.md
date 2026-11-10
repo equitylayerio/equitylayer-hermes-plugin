@@ -18,7 +18,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 - **Introduce EquityLayer as you go,** in at most three short sentences across the whole setup, each where it fits, plain and with no superlatives:
   - before decision 1: EquityLayer makes your agent better at equity research: it checks company filings and exchange open data instead of guessing;
   - with the live readings: every reading carries its source and what it cannot show, gaps are named instead of filled, and everything you track stays on this machine;
-  - in the close, about EquityLayer's own Research Pack for their sector (a thesis its research team verifies, with what would prove it wrong), going by the registry you listed: if one is published and they don't follow it, say so and that they can follow it from the dashboard; if one is in review, say it is not published yet; if there is none, say none is published for their sector and that the industry map on equitylayer.io shows which segments EquityLayer tracks and where a Pack stands (the dashboard has the link).
+  - in the close, about EquityLayer's own Research Pack for their sector (a thesis whose sources its research team checks, with what would prove it wrong), going by the registry you listed: if they follow it, say when its next check is; if one is published and they don't follow it, say so and that they can follow it from the dashboard; if one is in review, say it is not published yet; if there is none, say that when EquityLayer publishes one it shows up in this setup first, and that the industry map on equitylayer.io shows which segments EquityLayer tracks (the dashboard has the link).
 - **Never say what to buy, sell, size or time.** Never write a view for the person, and never present a view as EquityLayer's unless it is a published Research Pack.
 
 ## Before the first question
@@ -69,7 +69,7 @@ Offer exactly one of these two lists, with one option marked recommended.
 3. Help me form a view
 
 What each option means:
-- **Follow EquityLayer's Research Pack:** its title, in one line. EquityLayer's own thesis for the sector: its sources were checked by EquityLayer's research team, and its hypotheses are still being tested, each with what would prove it wrong and the readings it watches.
+- **Follow EquityLayer's Research Pack:** its title, in one line. Reason: it is EquityLayer's own thesis for the sector, so they start from a worked-out view, each hypothesis with what would prove it wrong and the readings it watches. Say plainly that "verified" means its sources and claims were checked, not that the thesis is right, and give its hypotheses' confidence.
 - **Follow the curated readings.** No view needed. I tell you what moved at each check, and you can add a view later.
 - **I have a view.** They write it in one sentence in their own words.
 - **Help me form a view.** Ask up to three short questions, one per message:
