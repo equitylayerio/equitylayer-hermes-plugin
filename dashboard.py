@@ -273,8 +273,11 @@ def _readings_hero(record: dict) -> str:
             f'<p class="hero-text">{len(rows)} readings: {up} up, {down} down, {flat} flat against the period before'
             + (f", {withheld} withheld" if withheld else "") + '.</p>'
             + (f'<p class="muted small">Largest moves</p><ul class="movers">{items}</ul>' if items else "")
-            + '<p class="muted small">This describes the readings, not a view. Add your own thesis to have Hermes check it.</p>'
-            '</section>')
+            + ('<p class="muted small">These are the readings the Pack above watches. Its hypotheses say what each '
+               'would mean, and when.</p>' if record.get("follow_id") else
+               '<p class="muted small">This describes the readings, not a view. Add your own thesis to have Hermes '
+               'check it.</p>')
+            + '</section>')
 
 
 THEME_LABELS = {"optical_cpo": "CPO and optical networking", "custom_asic": "Custom AI chips (ASIC)",
@@ -577,7 +580,7 @@ border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 .actions{{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
-.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.pack-view{{font-size:19px;line-height:1.35}}.hyp{{margin:10px 0 6px;padding-left:20px}}.hyp li{{margin:8px 0;line-height:1.45}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
+.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.hero h3{{font:500 24px/1.25 var(--display);margin:4px 0 8px}}.hero-text.pack-view{{font-size:18px;line-height:1.45;font-family:inherit}}.hyp{{margin:10px 0 6px;padding-left:20px}}.hyp li{{margin:8px 0;line-height:1.45}}.hyp .tag{{white-space:nowrap}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
 a{{color:var(--forest-2)}}footer{{margin-top:28px}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}
