@@ -50,3 +50,12 @@ def test_table_cells_cannot_break_out_of_a_row():
     assert formatters._cell("a|b\nc") == "a\\|b c"
     assert formatters._cell(None) == "—"
     assert formatters._cell(0) == "0"
+
+
+
+def test_registry_marks_in_review_entries_as_not_published():
+    from equitylayer_plugin.formatters import format_registry
+
+    text = format_registry([{"id": "cpo-pack", "title": "CPO Pack", "status": "in_review", "kind": "in_review"}])
+    assert "in review, not published yet" in text and "can't be read or followed" in text
+    assert "ask to read or follow" not in text

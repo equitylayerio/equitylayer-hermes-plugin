@@ -52,22 +52,29 @@ def format_registry(
             "`/equitylayer:start`.",
             source,
         )
+    def status(entry: dict) -> str:
+        return "in review, not published yet" if entry.get("status") == "in_review" or entry.get("kind") == "in_review" \
+            else str(entry.get("status") or "published")
+
     rows = [
         [
             entry.get("id"),
-            entry.get("kind"),
             entry.get("title"),
+            status(entry),
             "locked" if entry.get("locked") else entry.get("access"),
             entry.get("fresh_until"),
             entry.get("next_check_at"),
         ]
         for entry in entries
     ]
-    table = _table(["id", "kind", "title", "access", "fresh until", "next check"], rows)
+    table = _table(["id", "title", "status", "access", "fresh until", "next check"], rows)
+    in_review = any(status(e).startswith("in review") for e in entries)
+    published = any(not status(e).startswith("in review") for e in entries)
     return _join(
         "## EquityLayer Research Registry",
         table,
-        "Next: ask to read or follow one by its id.",
+        "Entries in review are not published yet: they can't be read or followed." if in_review else "",
+        "Next: ask to read or follow a published one by its id." if published else "",
         source,
     )
 

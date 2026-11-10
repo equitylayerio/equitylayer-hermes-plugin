@@ -155,3 +155,9 @@ def test_help_lists_five_commands_and_old_ones_still_route(make_service):
     handle = make_slash_handler(service)
     assert "You don't track anything yet" in handle("theses") and "You don't track anything yet" in handle("follows")
     assert "Usage: `/el remove <id>`" in handle("remove")
+
+
+def test_start_skill_never_calls_an_in_review_pack_available():
+    text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    assert '"EquityLayer Pack in review, not published yet"' in text
+    assert "An in-review Pack cannot be read or followed yet" in text

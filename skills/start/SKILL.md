@@ -30,7 +30,7 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
   3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings stay under the same id and become the thesis's evidence.
   4. Add a sector.
   Skip any decision already answered.
-- If the registry lists a Research Pack, note it inside the matching sector option ("CPO and optical networking: EquityLayer Pack available"), so decision 1 keeps four options. If they pick that sector, offer the Pack as the first way to follow it in decision 2: read it with `el_research_pack` (action `read`) and, on yes, follow it with `el_track` (`pack_id`).
+- If the registry lists a Research Pack, note it inside the matching sector option, so decision 1 keeps four options: a published one as "CPO and optical networking: EquityLayer Pack available"; one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector whose Pack is published, offer it as the first way to follow it in decision 2: read it with `el_research_pack` (action `read`) and, on yes, follow it with `el_track` (`pack_id`). An in-review Pack cannot be read or followed yet; say so and go on.
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
