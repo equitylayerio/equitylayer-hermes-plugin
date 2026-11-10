@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
+from .company_roles import role_for
 from .formatters import _bullets, _join, _section, _table
 from .harness_format import BOUNDARY, _attributions, _value
 from .harness_store import TAIPEI, today_taipei
@@ -69,6 +70,7 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
         "name": data.get("name") or variable,
         "period_basis": data.get("period_basis"),
         "chain_position": data.get("chain_position"),
+        "company": role_for(data.get("entity")),
         "entity": data.get("entity"),
         "unit": data.get("unit"),
         "cadence": data.get("cadence"),

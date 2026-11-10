@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from . import harness_format
+from .company_roles import role_for
 from .harness_store import HarnessStore, is_due
 from .mcp_client import McpError
 
@@ -152,16 +153,23 @@ class HarnessTools:
             return {"ok": False, "error": "missing_argument", "argument": "variable",
                     "message": "Give a variable id from el_plan_thesis, for example v:3363.two.revenue.monthly."}
         data = self._call("get_variable", {"variable": variable})
+        company = role_for(data.get("entity"))
+        markdown = harness_format.format_variable(data)
+        if company:
+            markdown += (f"\n\n**What {company['name'] or data.get('entity')} does** ({company['step']}): "
+                         f"{company['role']} _Source: {company['source_title'] or 'company description'}, "
+                         f"{harness_format.unlink(company['source_url'])}_")
         return {
             "ok": True,
             "variable": variable,
+            "company_role": company,
             "unit": data.get("unit"),
             "cadence": data.get("cadence"),
             "caveat": data.get("caveat"),
             "readings": data.get("readings"),
             "next_reading": data.get("next_reading"),
             "attribution": data.get("attribution"),
-            "markdown": harness_format.format_variable(data),
+            "markdown": markdown,
         }
 
     # -- save, list, check, seen -----------------------------------------------------------------

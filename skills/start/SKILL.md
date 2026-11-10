@@ -37,6 +37,7 @@ Call `el_profile_get` and `el_list_registry`.
 Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO recommended. Gloss the one they pick.
 
 **Before decision 2, show what is live.** Call `el_plan_thesis` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Show each in one plain line:
+- what the company does (`company_role`, from the company's own description, when the tool returns one);
 - the latest reading and its period;
 - what it shows;
 - what it cannot show (the caveat).

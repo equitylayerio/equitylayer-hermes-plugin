@@ -55,15 +55,21 @@ STEP_ORDER = ("material", "component", "optical_component", "optical_engine", "o
               "package", "packaging", "chip", "switch", "system", "server", "network", "datacenter")
 
 
-def _step_label(position: Any) -> str:
-    """'network.optical_component' -> 'Optical component'. Only the catalog's own field, no added roles."""
-    last = str(position or "").split(".")[-1].replace("_", " ").strip()
+def _step_label(row: dict) -> str:
+    """The company's own supply-chain step when we have it; else the catalog's chain_position."""
+    company = row.get("company") if isinstance(row.get("company"), dict) else None
+    if company and company.get("step"):
+        return str(company["step"])
+    last = str(row.get("chain_position") or "").split(".")[-1].replace("_", " ").strip()
     return last[:1].upper() + last[1:] if last else "Other"
 
 
-def _step_key(position: Any) -> tuple:
-    last = str(position or "").split(".")[-1]
-    return (STEP_ORDER.index(last) if last in STEP_ORDER else len(STEP_ORDER), last)
+def _step_key(row: dict) -> tuple:
+    company = row.get("company") if isinstance(row.get("company"), dict) else None
+    if company and company.get("step"):
+        return (0, int(company.get("step_order") or 99), str(company["step"]))
+    last = str(row.get("chain_position") or "").split(".")[-1]
+    return (1, STEP_ORDER.index(last) if last in STEP_ORDER else len(STEP_ORDER), last)
 
 
 def _company(row: dict) -> str:
@@ -71,17 +77,32 @@ def _company(row: dict) -> str:
     return (name.split(" (")[0] if " (" in name else name.split(" ")[0]).strip() or str(row.get("entity") or "")
 
 
+def _role_line(row: dict) -> str:
+    company = row.get("company") if isinstance(row.get("company"), dict) else None
+    if not company or not company.get("role"):
+        return ""
+    link = _https(company.get("source_url"))
+    source = f' <a href="{_e(link)}">source</a>' if link else ""
+    return f'<div class="role">{_e(company["role"])}{source}</div>'
+
+
 def _chain_strip(rows: list[dict]) -> str:
     steps: dict[str, list[str]] = {}
-    for row in sorted(rows, key=lambda r: _step_key(r.get("chain_position"))):
-        names = steps.setdefault(_step_label(row.get("chain_position")), [])
+    roles: dict[str, str] = {}
+    for row in sorted(rows, key=_step_key):
+        names = steps.setdefault(_step_label(row), [])
         if _company(row) not in names:
             names.append(_company(row))
+        if isinstance(row.get("company"), dict):
+            roles[_company(row)] = row["company"].get("role") or ""
     if len(steps) < 1 or all(k == "Other" for k in steps):
         return ""
+    def badge(name: str) -> str:
+        return f'<span class="badge" title="{_e(roles.get(name, ""))}">{_e(name)}</span>'
+
     boxes = '<span class="arrow" aria-hidden="true">→</span>'.join(
         f'<div class="step"><div class="step-name">{_e(step)}</div>'
-        f'<div class="step-cos">{"".join(f"<span class=badge>{_e(n)}</span>" for n in names)}</div></div>'
+        f'<div class="step-cos">{"".join(badge(n) for n in names)}</div></div>'
         for step, names in steps.items())
     companies = len({_company(r) for r in rows})
     return (f'<div class="chain"><div class="muted small">Supply chain covered: {companies} companies, '
@@ -97,10 +118,10 @@ def _watch_card(record: dict) -> str:
         return f'<section class="card">{head}<p class="muted">Not checked yet. Ask Hermes to check this watchlist.</p></section>'
     rows = []
     previous_step = None
-    ordered = sorted(last.get("rows") or [], key=lambda r: _step_key(r.get("chain_position")))
-    grouped = any(r.get("chain_position") for r in ordered)
+    ordered = sorted(last.get("rows") or [], key=_step_key)
+    grouped = any(r.get("chain_position") or r.get("company") for r in ordered)
     for r in ordered:
-        step = _step_label(r.get("chain_position"))
+        step = _step_label(r)
         if grouped and step != previous_step:
             rows.append(f'<tr class="grp"><td colspan="5">{_e(step)}</td></tr>')
             previous_step = step
@@ -109,7 +130,7 @@ def _watch_card(record: dict) -> str:
                    else f'{_num(latest.get("value"))} <span class="unit">{_e(r.get("unit"))}</span>')
         new = '<span class="dot" title="new since you last read">●</span>' if r.get("new") else ""
         rows.append(
-            f'<tr><td>{new}{_e(r.get("name"))}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
+            f'<tr><td>{new}{_e(r.get("name"))}{_role_line(r)}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
             f'<td class="num">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
             f'<td class="num">{_e(r.get("change"))}</td><td>{_spark(r.get("recent") or [])}</td>'
             f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
@@ -185,7 +206,8 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
         up_items += f'<li><span class="muted">{_e(u.get("date"))}</span> {_e(u.get("names"))}: {_e(u.get("reason"))}</li>'
     empty = not theses and not watchlists and not preview
     body = [
-        f'<header><h1>Your EquityLayer research</h1><p class="muted">Updated {_e(stamp)}'
+        f'<header><div class="brand"><svg width="26" height="26" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="3" fill="#173f32"/><circle cx="27.5" cy="10.5" r="4.25" fill="#c49a50"/><rect x="8.5" y="12.5" width="21" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="20.25" width="15" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="28" width="21" height="5.25" fill="#f8f5eb"/></svg>EquityLayer</div><p class="eyebrow">Discover → Follow → Track changes</p>'
+        f'<h1>Your research</h1><p class="muted">Updated {_e(stamp)}'
         + (f" · {_e(about)}" if about else "") + "</p></header>",
     ]
     if empty:
@@ -221,22 +243,44 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EquityLayer research</title>
 <style>
-:root{{--bg:#f7f7f5;--card:#fff;--ink:#1d1d1b;--muted:#6b6b66;--line:#e4e3de;--accent:#2f5bd3;--warn:#b4541a;
---seen:#2e7d4f;--against:#b3261e;--late:#b4541a;--nodata:#8a8a85}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#151514;--card:#1f1f1d;--ink:#ececea;--muted:#a3a39d;--line:#33332f;
---accent:#8fb0ff;--warn:#f0a066;--seen:#6fcf97;--against:#ff8a80;--late:#f0a066;--nodata:#9a9a94}}}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,system-ui,Segoe UI,sans-serif}}
-main{{max-width:960px;margin:0 auto;padding:24px 16px 48px}}h1{{font-size:24px;margin:0 0 4px}}h2{{font-size:17px;margin:28px 0 10px}}
-h3{{font-size:16px;margin:0}}.card{{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0}}
-.card h2{{margin-top:0}}.card-head{{display:flex;justify-content:space-between;gap:12px;align-items:center}}
-.tag{{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}}.tag.warn{{color:var(--warn);border-color:var(--warn)}}
+:root{{--paper:#f4f2e9;--paper-bright:#fbfaf5;--ink:#15251e;--forest:#173f32;--forest-2:#245b46;--sage:#d7dfd2;--gold:#b18a46;
+--line:#cfcec3;--muted:#667069;--warn:#9a5b1c;--seen:#245b46;--against:#a3322a;--late:#9a5b1c;--nodata:#8a8f88;
+--display:"Instrument Serif","Iowan Old Style","Palatino Linotype",Georgia,serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+--body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
+@media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
+--sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+main{{max-width:980px;margin:0 auto;padding:22px 16px 44px}}
+.brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
+.eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
+h1{{font:400 40px/1.05 var(--display);letter-spacing:-.01em;margin:0 0 6px}}h2{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;
+text-transform:uppercase;color:var(--forest-2);margin:30px 0 10px}}h3{{font:400 24px/1.15 var(--display);margin:0}}
+.card{{background:var(--paper-bright);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0;
+box-shadow:0 14px 40px rgba(21,37,30,.06)}}.card h2{{margin-top:0}}
+.card-head{{display:flex;justify-content:space-between;gap:12px;align-items:center}}
+.tag{{font:500 11px/1 var(--mono);letter-spacing:.06em;padding:5px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}}
+.tag.warn{{color:var(--warn);border-color:var(--warn)}}
 .muted{{color:var(--muted)}}.small{{font-size:13px}}.unit{{color:var(--muted);font-size:12px}}.caveat{{color:var(--muted);font-size:12px}}
-.hyp{{margin:6px 0}}table{{width:100%;border-collapse:collapse;margin-top:8px}}th,td{{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}}
-th{{font-size:12px;color:var(--muted);font-weight:600}}.num{{white-space:nowrap}}.dot{{color:var(--accent);margin-right:6px}}.spark{{color:var(--accent)}}
-.chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}}
+.role{{font-size:13px;margin:2px 0;color:var(--forest)}}.hyp{{margin:8px 0;font-family:var(--display);font-size:19px}}
+.tbl{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;margin-top:8px}}
+th,td{{text-align:left;padding:9px 6px;border-top:1px solid var(--line);vertical-align:top}}
+th{{font:500 11px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}}
+.num{{white-space:nowrap;font-variant-numeric:tabular-nums}}.dot{{color:var(--forest-2);margin-right:6px}}.spark{{color:var(--forest-2)}}
+tr.grp td{{font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--forest-2);background:var(--paper);padding:7px 6px}}
+.chain{{margin:12px 0 6px}}.steps{{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:8px}}
+.step{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:150px;flex:1}}
+.step-name{{font:500 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--forest-2);margin-bottom:7px}}
+.step-cos{{display:flex;flex-wrap:wrap;gap:5px}}.badge{{font-size:12px;padding:2px 8px;border-radius:6px;background:var(--paper-bright);
+border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
+.chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}}
 .s-seen{{color:var(--seen)}}.s-against{{color:var(--against)}}.s-late{{color:var(--late)}}.s-no_data,.s-not_due{{color:var(--nodata)}}
-.chain{{margin:10px 0 4px}}.steps{{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-top:6px}}.step{{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:140px;flex:1}}.step-name{{font-weight:600;font-size:13px;margin-bottom:6px}}.step-cos{{display:flex;flex-wrap:wrap;gap:4px}}.badge{{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--muted)}}tr.grp td{{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);padding:6px}}@media (max-width:640px){{.arrow{{display:none}}.step{{min-width:100%}}}}.actions{{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}}.actions button{{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}}.actions button.ghost{{background:transparent;color:var(--accent)}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--warn)}}a{{color:var(--accent)}}footer{{margin-top:28px}}
-.tbl{{overflow-x:auto}}@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}td:first-child{{min-width:9em}}}}
+.actions{{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
+border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
+.actions button.ghost{{background:transparent;color:var(--forest)}}
+.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
+a{{color:var(--forest-2)}}footer{{margin-top:28px}}
+@media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
+td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}
 </style></head><body><main>
 {"".join(body)}
 </main></body></html>
