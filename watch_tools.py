@@ -120,7 +120,7 @@ def format_watch(record: dict, check: dict, *, seen: bool) -> str:
     )
     upcoming = _bullets(f"{u.get('date')} · {u.get('names')}: {u.get('reason')}" for u in check.get("upcoming") or [])
     read_line = ("Saved as read." if seen else
-                 f"Say \"I've read it\" (or run `/el watch-seen {record.get('id')}`) and it becomes what the next check compares with.")
+                 f"Say \"I've read it\" (or run `/el seen {record.get('id')}`) and it becomes what the next check compares with.")
     return _join(
         f"## Watchlist: {record.get('title')}",
         f"As of {check.get('as_of')} · next check {check.get('next_due')}",
@@ -155,7 +155,7 @@ class WatchTools:
             data = self._call("get_variable", {"variable": variable})
             names[variable] = data.get("name") or variable
         store = self._watch_store()
-        watch_id = args.get("watch_id") or store.unique_id(title)
+        watch_id = args.get("watch_id") or args.get("_new_id") or store.unique_id(title)
         if args.get("watch_id") and store.get(watch_id) is None:
             return {"ok": False, "error": "unknown_watchlist", "watch_id": watch_id,
                     "hint": "Omit watch_id to create a new watchlist."}
@@ -237,7 +237,7 @@ class WatchTools:
             record = store.get(watch_id)
             if record is None:
                 return {"ok": False, "error": "unknown_watchlist", "watch_id": watch_id,
-                        "hint": "Run el_watch_list (/el watches) for saved ids."}
+                        "hint": "Run el_list (/el list) for saved ids."}
             targets = [record]
         else:
             records, _ = store.all()

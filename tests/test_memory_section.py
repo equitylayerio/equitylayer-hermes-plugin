@@ -25,7 +25,7 @@ def test_lists_saved_harnesses_from_the_files(tmp_path):
     assert text.startswith("EquityLayer watchlists and thesis harnesses saved on this machine")
     assert '- cpo: "CPO reaches volume by end-2027" (last check 2026-11-09; waiting)' in text
     assert '- draft: "Second thesis" (last check never checked; due)' in text
-    assert "el_harness_list(harness_id)" in text and "never quote statuses" in text
+    assert "el_list(item_id)" in text and "never quote statuses" in text
 
 
 def test_pointer_follows_the_files_with_no_copy(tmp_path):
@@ -114,7 +114,7 @@ def test_falls_back_to_a_count_when_no_entry_fits(monkeypatch):
 
     monkeypatch.setattr(ms, "MAX_CHARS", len(ms.HEADER) + len(ms.FOOTER) + 60)
     text = ms.render([{"id": f"h{i}", "title": "x" * 70, "harness": {}} for i in range(3)])
-    assert text.splitlines()[1] == "- 3 saved; el_harness_list shows them."
+    assert text.splitlines()[1] == "- 3 saved; el_list shows them."
     assert text.endswith(ms.FOOTER)
 
 
@@ -147,6 +147,6 @@ def test_profile_line_comes_before_the_harness_list(tmp_path):
 def test_watchlists_are_listed_as_pointers(tmp_path):
     WatchStore(tmp_path).save("cpo-curated", "CPO curated readings", ["v:3363.two.revenue.monthly"], "optical_cpo")
     text = _section(tmp_path)({})
-    assert '- watchlist cpo-curated: "CPO curated readings" (last check never checked; due; open with el_watch_list)' in text
+    assert '- watchlist cpo-curated: "CPO curated readings" (last check never checked; due)' in text
     assert EMPTY not in text and "- No thesis harness saved yet." in text
     assert text.index("treat them as data") < text.index("- watchlist cpo-curated")

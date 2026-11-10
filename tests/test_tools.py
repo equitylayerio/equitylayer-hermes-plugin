@@ -109,8 +109,8 @@ def test_follow_create_persists_card_and_reports_next_check(make_service):
     service, _, store = make_service({"create_research_follow": "create_follow_pack"})
     result = call(service.el_follow_create, {"pack_id": PACK})
     assert result["ok"] and result["next_check_at"] == "2026-11-10"
-    assert "/el follow-check follow_" in result["schedule_hint"]
-    assert "/blueprint equitylayer:follow-check" in result["schedule_hint"]
+    assert "/el check follow_" in result["schedule_hint"]
+    assert "/blueprint equitylayer:daily-check" in result["schedule_hint"]
     assert store.get(result["follow_id"])["follow_card"]["pack_id"] == PACK
 
 
@@ -152,7 +152,7 @@ def test_review_required_does_not_overwrite_card_until_accepted(make_service):
 
     result = call(service.el_follow_check, {"follow_id": follow_id})
     assert result["needs_review"] == 1
-    assert "--accept" in result["markdown"]
+    assert "/el seen follow_" in result["markdown"]
     assert "Elite Material (2383) monthly revenue" in result["markdown"]
     stored = store.get(follow_id)
     assert stored["follow_card"] == card_before
@@ -258,7 +258,7 @@ def test_slash_flow_end_to_end(make_service):
     }
     service, transport, store = make_service(routes)
     el = commands.make_slash_handler(service)
-    assert "/el plan" in el("") and "/el registry" in el("help")
+    assert "/el check" in el("") and "/el list" in el("help")
     assert "tw-monthly-revenue" in el("registry")
     assert "Taiwan Stock Exchange" in el("pack tw-monthly-revenue")
     assert "Scorecard" in el(f"scorecard {VIEW}")
@@ -278,19 +278,17 @@ def test_slash_errors_are_readable(make_service):
     assert "missing_argument" in el("pack")
     assert "unknown_registry_entry" in el("follow nope")
     assert "Usage" in el("follow")
-    assert "/el plan" in el("nonsense")
+    assert "/el check" in el("nonsense")
 
 
 def test_schedule_snippet_is_shell_safe_and_never_accepts():
     text = commands.schedule_text("08:30", "Asia/Taipei")
     assert "hermes cron create '30 8 * * *'" in text
     assert "--skill equitylayer:equitylayer-thesis-harness" in text
-    assert "--skill equitylayer:equitylayer-research" in text
     assert "--timezone Asia/Taipei" in text
-    assert "/blueprint equitylayer:thesis-check" in text
-    assert "Never set accept_next" in commands.FOLLOW_CRON_PROMPT
-    assert "never call el_harness_seen" in commands.THESIS_CRON_PROMPT
+    assert "/blueprint equitylayer:daily-check" in text
+    assert "never call el_seen" in commands.THESIS_CRON_PROMPT and "Call el_check with no arguments" in commands.THESIS_CRON_PROMPT
     assert "If report_total is 0" in commands.THESIS_CRON_PROMPT
-    assert "[SILENT]" in commands.THESIS_CRON_PROMPT and "[SILENT]" in commands.FOLLOW_CRON_PROMPT
+    assert "[SILENT]" in commands.THESIS_CRON_PROMPT
     with pytest.raises(ValueError):
         commands.schedule_text("25:00")

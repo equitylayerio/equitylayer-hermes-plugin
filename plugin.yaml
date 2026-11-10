@@ -17,25 +17,15 @@ homepage: https://equitylayer.io
 tags: [finance, research, equities, thesis, mcp, cpo, physical-ai, space]
 
 provides_tools:
-  - el_plan_thesis
+  - el_profile
+  - el_plan
   - el_get_variable
-  - el_harness_save
-  - el_harness_check
-  - el_harness_seen
-  - el_harness_list
-  - el_profile_get
-  - el_profile_save
-  - el_watch_save
-  - el_watch_check
-  - el_watch_seen
-  - el_watch_list
+  - el_track
+  - el_check
+  - el_seen
+  - el_list
   - el_dashboard_render
-  - el_list_registry
-  - el_get_pack
-  - el_scorecard
-  - el_follow_create
-  - el_follow_check
-  - el_follow_list
+  - el_research_pack
 
 requires_hermes: ">=0.23.0"
 

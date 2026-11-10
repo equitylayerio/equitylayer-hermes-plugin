@@ -12,6 +12,7 @@ from .harness_store import HarnessStore, default_harness_store
 from .profile_store import SECTORS, ProfileStore, default_profile_store, describe, validate_fields
 from .watch_store import WatchStore, default_watch_store
 from .watch_tools import WatchTools
+from .track_tools import TrackTools
 from . import dashboard as dashboard_page
 from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
@@ -71,7 +72,7 @@ def _safe(method: Callable[..., dict]) -> Callable[..., str]:
     return handler
 
 
-class EquityLayerTools(HarnessTools, WatchTools):
+class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
     def __init__(
         self,
         get_config: Callable[..., Any] | None = None,
@@ -297,8 +298,8 @@ class EquityLayerTools(HarnessTools, WatchTools):
         when = f" after {record['next_check_at']}" if record and record.get("next_check_at") else ""
         follow_id = record.get("follow_id") if record else "<follow_id>"
         return (
-            f"Run `/el follow-check {follow_id}`{when}, or schedule checks for every due follow with "
-            "`/blueprint equitylayer:follow-check`."
+            f"Run `/el check {follow_id}`{when}, or let the daily check (`/blueprint equitylayer:daily-check`) "
+            "cover it."
         )
 
     def _follow_create(self, args: dict) -> dict:
@@ -556,6 +557,15 @@ class EquityLayerTools(HarnessTools, WatchTools):
         return {"ok": True, "profile": profile, "stored": "local only; never sent to EquityLayer"}
 
     el_list_registry = _safe(_registry)
+    # The nine tools the model sees (one tracked object, three levels).
+    el_profile = _safe(TrackTools._profile)
+    el_plan = _safe(HarnessTools._plan)
+    el_track = _safe(TrackTools._track)
+    el_check = _safe(TrackTools._check)
+    el_seen = _safe(TrackTools._seen)
+    el_list = _safe(TrackTools._list)
+    el_research_pack = _safe(TrackTools._research_pack)
+    # Earlier per-kind tools: kept for the slash command and tests, not registered with Hermes.
     el_profile_get = _safe(_profile_get)
     el_watch_save = _safe(WatchTools._watch_save)
     el_watch_check = _safe(WatchTools._watch_check)

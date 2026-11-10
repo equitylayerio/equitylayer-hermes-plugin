@@ -9,13 +9,13 @@ Use this when the user asks for EquityLayer's own published research. For the us
 
 ## Steps
 
-1. Call `el_list_registry`. Use only the ids it returns.
+1. Call `el_research_pack` (action `list`). Use only the ids it returns.
 2. **If it returns no entries, say that no Research Pack is published right now.** Do not use a retired pack as if it were current.
-   Offer to track the user's own thesis instead (`el_plan_thesis`).
-3. For a public pack, call `el_get_pack`, then `el_scorecard` with the same id. Do not try entries marked `locked`.
+   Offer the `equitylayer:start` flow instead: follow a sector's curated readings or track their own thesis.
+3. For a public pack, call `el_research_pack` with action `read`, then action `scorecard`, with the same `pack_id`. Do not try entries marked `locked`.
 4. Show the result's `markdown`. It carries the source attribution and limits.
-5. Offer `el_follow_create` so the user hears when new evidence arrives. `el_follow_list` shows local follows and
-   `el_follow_check` checks them.
+5. Offer to follow it: on yes, call `el_track` with `pack_id`. It becomes a tracked item at the level "EquityLayer thesis";
+   `el_check` checks it with everything else and `el_list` shows it.
 
 ## Rules
 
@@ -26,8 +26,8 @@ Use this when the user asks for EquityLayer's own published research. For the us
 
 ## Updates that need review
 
-When `el_follow_check` returns `needs_review`, show the change. The stored card does not change until the user says to accept.
-Only then call `el_follow_check` with `follow_id` and `accept_next: true`. Scheduled runs never accept.
+When `el_check` reports that a followed Pack needs review, show the change. The stored card does not change until the user says to accept.
+Only then call `el_seen` with that `item_id`. Scheduled runs never accept.
 
 ## When access is refused
 

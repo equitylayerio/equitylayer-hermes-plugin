@@ -331,3 +331,96 @@ EL_DASHBOARD_RENDER = {
         },
     },
 }
+
+
+# -- The nine tools Hermes registers: one tracked object, three levels -----------------------------------
+
+_LEVELS = (
+    "A tracked item has one of three levels: readings (curated readings, no view needed), your thesis (the same "
+    "readings plus the person's own thesis and wrong_if) and EquityLayer thesis (a published Research Pack the "
+    "person follows). "
+)
+
+EL_PROFILE = {
+    "name": "el_profile",
+    "description": (
+        "Read or save the person's local EquityLayer profile. With no fields it returns the profile, what they "
+        "already track, and the sector options with live coverage; call it first when they start or return. With "
+        "fields it saves only what they chose. Local only; refused in scheduled runs when saving."
+    ),
+    "parameters": {"type": "object", "properties": dict(EL_PROFILE_SAVE["parameters"]["properties"])},
+}
+
+EL_PLAN = {**EL_PLAN_THESIS, "name": "el_plan", "description": (
+    "Find catalog variables for a sector or a thesis. Sends the text to EquityLayer, which stores nothing, and "
+    "returns candidate variables with category, cadence, latest period, caveats and coverage gaps. Choose only ids "
+    "from these candidates, and ask the person before saving anything. " + _NOT_ADVICE)}
+
+EL_TRACK = {
+    "name": "el_track",
+    "description": (
+        "Save what the person chose to track, on this machine. " + _LEVELS + "Give variables (and a title and "
+        "theme) to follow readings; give harness to save their own thesis; give pack_id to follow a published "
+        "Research Pack. To add a thesis to readings they already follow, pass that item_id with harness: the "
+        "readings keep their id and gain the thesis. Call it only after the person says yes in this conversation. "
+        + EL_HARNESS_SAVE["description"].split("The harness has four parts: ", 1)[1].split(" EquityLayer validates", 1)[0]
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "item_id": {"type": "string", "description": "An existing item to update or upgrade (from el_list)."},
+            "title": {"type": "string", "description": "Short title for readings, e.g. \"CPO curated readings\"."},
+            "theme": {"type": "string", "enum": ["optical_cpo", "space_infrastructure", "custom_asic", "physical_ai"]},
+            "variables": {"type": "array", "items": {"type": "string"}, "description": "1 to 8 variable ids (v:...)."},
+            "harness": EL_HARNESS_SAVE["parameters"]["properties"]["harness"],
+            "pack_id": {"type": "string", "description": "A published Research Pack id from el_research_pack."},
+        },
+    },
+}
+
+EL_CHECK = {
+    "name": "el_check",
+    "description": (
+        "Check what the person tracks. With no item_id it checks every item that is due or unread, at every level, "
+        "and returns markdown to show as is plus report_total (0 means nothing new). With item_id it checks that "
+        "one. It never marks anything as read; the person does that through el_seen. Also refreshes the dashboard. "
+        + _STOP
+    ),
+    "parameters": {"type": "object", "properties": {"item_id": {"type": "string", "description": "Optional id from el_list."}}},
+}
+
+EL_SEEN = {
+    "name": "el_seen",
+    "description": (
+        "After the person says they have read a check, keep it as what the next check compares with (for a "
+        "followed Pack, accept its reviewed update). Refused in scheduled runs."
+    ),
+    "parameters": {"type": "object", "properties": {"item_id": {"type": "string"}}, "required": ["item_id"]},
+}
+
+EL_LIST = {
+    "name": "el_list",
+    "description": "List everything the person tracks with its level, last check and state, or open one item. Local only.",
+    "parameters": {"type": "object", "properties": {"item_id": {"type": "string", "description": "Optional id to open."}}},
+}
+
+EL_RESEARCH_PACK = {
+    "name": "el_research_pack",
+    "description": (
+        "EquityLayer's published research. action=list returns current Research Packs (it may be empty: say so "
+        "plainly); action=read reads one with its thesis, tracked variables and next check; action=scorecard shows "
+        "how its claims resolved. To follow a Pack, use el_track with pack_id. " + _NOT_ADVICE
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["list", "read", "scorecard"]},
+            "pack_id": {"type": "string"},
+            "symbols": {"type": "array", "items": {"type": "string"}},
+            "publisher": {"type": "string"},
+        },
+    },
+}
+
+REGISTERED = (EL_PROFILE, EL_PLAN, EL_GET_VARIABLE, EL_TRACK, EL_CHECK, EL_SEEN, EL_LIST, EL_DASHBOARD_RENDER,
+              EL_RESEARCH_PACK)

@@ -86,8 +86,8 @@ def test_checks_refresh_the_dashboard(make_service, tmp_path):
 
 
 def test_daily_prompt_covers_watchlists_and_never_marks_read():
-    assert "el_watch_check" in THESIS_CRON_PROMPT and "el_harness_check" in THESIS_CRON_PROMPT
-    assert "never call el_harness_seen or el_watch_seen" in THESIS_CRON_PROMPT
+    assert "Call el_check with no arguments" in THESIS_CRON_PROMPT
+    assert "never call el_seen" in THESIS_CRON_PROMPT
     assert "[SILENT]" in THESIS_CRON_PROMPT
 
 

@@ -249,7 +249,7 @@ def test_slash_flow_for_your_own_thesis(make_service):
     assert "**Hypothesis:**" in el(f"show {hid}")
     assert "Removed" in el(f"remove {hid}")
     assert "unknown_harness" in el(f"show {hid}")
-    assert "thesis-check" in el("schedule 07:15 Asia/Taipei")
+    assert "daily-check" in el("schedule 07:15 Asia/Taipei")
     assert "Usage" in el("schedule 99:99")
 
 

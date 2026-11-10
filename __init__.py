@@ -16,37 +16,16 @@ def register(ctx) -> None:
         get_config=ctx.get_config,
         in_cron=lambda: ctx.current_cron_execution() is not None,
     )
-    for schema, handler in (
-        # Your own thesis (primary)
-        (schemas.EL_PLAN_THESIS, service.el_plan_thesis),
-        (schemas.EL_GET_VARIABLE, service.el_get_variable),
-        (schemas.EL_HARNESS_SAVE, service.el_harness_save),
-        (schemas.EL_HARNESS_CHECK, service.el_harness_check),
-        (schemas.EL_HARNESS_SEEN, service.el_harness_seen),
-        (schemas.EL_HARNESS_LIST, service.el_harness_list),
-        (schemas.EL_PROFILE_GET, service.el_profile_get),
-        (schemas.EL_PROFILE_SAVE, service.el_profile_save),
-        # Follow curated readings without a thesis, and the local dashboard
-        (schemas.EL_WATCH_SAVE, service.el_watch_save),
-        (schemas.EL_WATCH_CHECK, service.el_watch_check),
-        (schemas.EL_WATCH_SEEN, service.el_watch_seen),
-        (schemas.EL_WATCH_LIST, service.el_watch_list),
-        (schemas.EL_DASHBOARD_RENDER, service.el_dashboard_render),
-        # Published research (secondary)
-        (schemas.EL_LIST_REGISTRY, service.el_list_registry),
-        (schemas.EL_GET_PACK, service.el_get_pack),
-        (schemas.EL_SCORECARD, service.el_scorecard),
-        (schemas.EL_FOLLOW_CREATE, service.el_follow_create),
-        (schemas.EL_FOLLOW_CHECK, service.el_follow_check),
-        (schemas.EL_FOLLOW_LIST, service.el_follow_list),
-    ):
+    # One tracked object, three levels: the model sees nine tools.
+    for schema in schemas.REGISTERED:
+        handler = getattr(service, schema["name"])
         ctx.register_tool(name=schema["name"], toolset=TOOLSET, schema=schema, handler=handler, emoji="📈")
 
     ctx.register_command(
         "el",
         handler=commands.make_slash_handler(service),
         description="EquityLayer: track your own thesis (plan, check, seen) and published research",
-        args_hint="<start|dashboard|watches|plan|var|theses|show|check|seen|remove|schedule|registry|pack|follow|follows>",
+        args_hint="<start|dashboard|check|seen|list|help>",
     )
     ctx.register_cli_command(
         name="equitylayer",

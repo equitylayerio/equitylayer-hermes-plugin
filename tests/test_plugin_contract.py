@@ -61,7 +61,7 @@ def test_other_surfaces_are_registered():
     assert ctx.commands == ["el"]
     assert ctx.cli == ["equitylayer"]
     assert ctx.skills == ["equitylayer-research", "equitylayer-thesis-harness", "start"]
-    assert ctx.blueprints == ["thesis-check", "follow-check"]
+    assert ctx.blueprints == ["daily-check"]
     assert ctx.sections == ["equitylayer.tracked-theses"]
 
 
@@ -98,8 +98,9 @@ def test_start_skill_offers_the_websites_sectors_in_order():
     assert [s["id"] for s in SECTORS if s["recommended"]] == ["optical_cpo"]
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
     for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
-                   "el_profile_get", "el_profile_save", "Follow the curated readings (recommended)",
-                   "On yes, call `el_watch_save`", "On yes, call `el_harness_save`", "el_dashboard_render",
+                   "el_profile", "Follow the curated readings (recommended)",
+                   "On yes, call `el_track` with the title", "On yes, call `el_track` with the harness",
+                   "el_dashboard_render", "call `el_track` with that `item_id` and the harness",
                    "Before decision 2, show what is live"):
         assert phrase in text
 
@@ -119,3 +120,12 @@ def test_dashboard_preview_comes_with_the_live_readings():
     assert text.index("Before decision 2, show what is live") < preview < text.index("## Decision 2.")
     first_check = text.index("**Then check once:**")
     assert first_check < text.index("Then call `el_dashboard_render` (no preview now)") < text.index("## Decision 4.")
+
+
+def test_skills_name_only_registered_tools():
+    import re
+
+    registered = set(_manifest()["provides_tools"])
+    for path in (ROOT / "skills").glob("*/SKILL.md"):
+        named = set(re.findall(r"\bel_[a-z_]+", path.read_text(encoding="utf-8")))
+        assert named <= registered, (path.name, named - registered)

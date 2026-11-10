@@ -259,7 +259,7 @@ def format_check(result: dict) -> str:
     ]
     if review:
         lines.append(
-            f"Review the change, then run `/el follow-check {follow_id} --accept` to move this follow to the new "
+            f"Review the change, then run `/el seen {follow_id}` to move this follow to the new "
             "baseline. The stored card stays unchanged until then."
         )
     return _join(*lines)

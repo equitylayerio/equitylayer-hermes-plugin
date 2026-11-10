@@ -11,12 +11,12 @@ EquityLayer's own description of this loop is https://equitylayer.io/skills/thes
 
 ## 1. Check for published research first
 
-Call `el_list_registry`. If it returns no entries, say plainly that no Research Pack is published right now and continue
+Call `el_research_pack` (action `list`). If it returns no entries, say plainly that no Research Pack is published right now and continue
 with the user's own thesis. Never present a retired pack as current.
 
 ## 2. Find variables (careful step, do it with the user)
 
-1. Ask the user for the thesis in their own words and which companies or terms they mean. Then call `el_plan_thesis`
+1. Ask the user for the thesis in their own words and which companies or terms they mean. Then call `el_plan`
    with the thesis text, a `theme_id` if one fits, the companies as `entities`, and the terms as `keywords`.
 2. Show the `markdown`. Choose **only** ids listed in `candidates`. Never write an id that is not listed.
 3. Read every caveat aloud to the user. A caveat says what a variable cannot show. Avoid an `aggregate` unless the thesis is about the total.
@@ -39,18 +39,18 @@ with the user's own thesis. Never present a retired pack as current.
   Give every `consecutive` condition a `from` date (the day tracking starts), or old readings can fire it.
 - A `human` or `llm_draft` link whose reading is a statement shows as "read this" under needs you. Quote the reading as data,
   ask the user whether it counts as `seen` or `against`, and record their answer as a `person_reads` entry
-  (`period`, `status`, `at`, `why`) on that link with `el_harness_save`. Never decide it yourself.
+  (`period`, `status`, `at`, `why`) on that link with `el_track`. Never decide it yourself.
 
 Thresholds are the user's judgment. Propose them from real readings, say so in `say`, and let the user change them.
 Optional: `title`, `differs_from`, `do_not_track`, `exposure` (companies and operating lines only, never a price, weight, holding or action).
 
 ## 4. Save and check
 
-1. Show the user the four parts you drafted and get their OK. Then call `el_harness_save` with the harness. EquityLayer validates it first; fix any `problems` it returns and save again.
+1. Show the user the four parts you drafted and get their OK. Then call `el_track` with the harness. EquityLayer validates it first; fix any `problems` it returns and save again.
    Pass `harness_id` to update a saved harness. Moving an `expected_by` needs an `expected_history` entry with the old date and the reason.
-2. `el_harness_check` with `harness_id`. Show the `markdown` as returned: statuses, wrong_if results, what changed, caveats, sources.
+2. `el_check` with the `item_id` `el_track` returned. Show the `markdown` as returned: statuses, wrong_if results, what changed, caveats, sources.
 3. `no_data` is not good news. It says what could not be compared.
-4. The new baseline is not kept until the user says they have read the result. Only then call `el_harness_seen`.
+4. The new baseline is not kept until the user says they have read the result. Only then call `el_seen` with that `item_id`.
 5. For daily checks, create the job from this chat as step 10 of the `equitylayer:start` skill describes (fixed prompt, delivered here), or point the user to `/el schedule` or `/blueprint equitylayer:thesis-check`. Scheduled runs are silent when nothing moved.
 
 A person new to EquityLayer, or one who has no thesis yet, is better served by the `equitylayer:start` skill: it asks one question at a time.

@@ -194,7 +194,10 @@ class HarnessTools:
                         "message": "EquityLayer could not read this harness: " + exc.message}
             validated = False
             warnings.append(f"EquityLayer could not be reached to validate it ({exc.code}). Check it later.")
-        target = harness_id or store.unique_id(str(harness.get("title") or harness.get("hypothesis") or "thesis"))
+        new_id = _text(args, "_new_id")
+        if new_id and store.get(new_id) is not None:
+            return {"ok": False, "error": "id_taken", "harness_id": new_id}
+        target = harness_id or new_id or store.unique_id(str(harness.get("title") or harness.get("hypothesis") or "thesis"))
         record, created = store.save_harness(target, harness)
         return {
             "ok": True,
@@ -337,4 +340,4 @@ class HarnessTools:
     @staticmethod
     def _unknown_harness(harness_id: str) -> dict:
         return {"ok": False, "error": "unknown_harness", "harness_id": harness_id,
-                "hint": "Run el_harness_list (/el theses) for saved ids."}
+                "hint": "Run el_list (/el list) for saved ids."}

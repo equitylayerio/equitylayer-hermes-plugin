@@ -23,20 +23,21 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 
 ## Before the first question
 
-Call `el_profile_get` and `el_list_registry`.
+Call `el_profile` (no fields) and `el_research_pack` (action `list`).
 - If `returning` is true, greet them by what they follow, and offer:
   1. Show my dashboard (recommended).
   2. Check everything now.
-  3. Add a sector or a view.
+  3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings keep their id and gain the thesis.
+  4. Add a sector.
   Skip any decision already answered.
-- If the registry lists a Research Pack, note it inside the matching sector option ("CPO and optical networking: EquityLayer Pack available"), so decision 1 keeps four options. If they pick that sector, offer the Pack as the first way to follow it in decision 2 and use the `equitylayer:equitylayer-research` skill.
+- If the registry lists a Research Pack, note it inside the matching sector option ("CPO and optical networking: EquityLayer Pack available"), so decision 1 keeps four options. If they pick that sector, offer the Pack as the first way to follow it in decision 2: read it with `el_research_pack` (action `read`) and, on yes, follow it with `el_track` (`pack_id`).
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
 
-Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO recommended. Gloss the one they pick.
+Offer the four `sectors` from `el_profile`, in order, with their status, CPO recommended. Gloss the one they pick.
 
-**Before decision 2, show what is live.** Call `el_plan_thesis` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Use the candidate's `category` to mix what the readings tell: demand (segment revenue or management statements), capacity (capex), pricing (gross margin), and Taiwan monthly revenue for a high-frequency pulse. Total revenue alone is coarse; don't show three revenue lines. Show each in one plain line:
+**Before decision 2, show what is live.** Call `el_plan` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Use the candidate's `category` to mix what the readings tell: demand (segment revenue or management statements), capacity (capex), pricing (gross margin), and Taiwan monthly revenue for a high-frequency pulse. Total revenue alone is coarse; don't show three revenue lines. Show each in one plain line:
 - what the company does (`company_role`, from the company's own description, when the tool returns one);
 - the latest reading and its period, and what kind of signal it is (demand, capacity, pricing or revenue pulse);
 - what it shows;
@@ -66,19 +67,18 @@ A view takes a stand and could be wrong.
 
 ## Decision 3. One card to approve
 
-**For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), and mix categories: at least one demand reading, one capacity reading (capex) and one pricing reading (gross margin) when the plan has them, plus Taiwan monthly revenue. One line each: latest level, what it tells about the sector (in one plain clause), and its caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_watch_save` with the title, the variable ids and the theme.
+**For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), and mix categories: at least one demand reading, one capacity reading (capex) and one pricing reading (gross margin) when the plan has them, plus Taiwan monthly revenue. One line each: latest level, what it tells about the sector (in one plain clause), and its caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_track` with the title, the variable ids and the theme.
 
-**For a view:** call `el_plan_thesis` with their view, the theme and any companies they named. Call `el_get_variable` on each variable you propose. Show one card:
+**For a view:** call `el_plan` with their view, the theme and any companies they named. Call `el_get_variable` on each variable you propose. Show one card:
 - hypothesis (their words), why, and the companies it covers;
 - three to five variables, one plain line each with its caveat; name the gaps;
 - thresholds around the latest levels that cover the whole range (weakens / no material change / strengthens), each marked "suggested, your call";
 - wrong_if: one numeric condition counted `from` today, and one that only they can judge, with a date to check by.
 
-On yes, call `el_harness_save`. If EquityLayer rejects a word, say so and suggest new wording; "buy" is refused as trade language, so use "procure".
+On yes, call `el_track` with the harness. If EquityLayer rejects a word, say so and suggest new wording; "buy" is refused as trade language, so use "procure".
 
 **Then check once:**
-- For curated readings: `el_watch_check` with the watch id.
-- For a view: `el_harness_check` with the harness id.
+- `el_check` with the `item_id` that `el_track` returned.
 
 Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and copy its `::preview{...}` line exactly, on a line of its own: the dashboard now follows these readings; it is built on this machine and contacts no one.
 
@@ -96,7 +96,7 @@ For a view, explain the statuses in one line:
 3. I've read it; only when I ask.
 4. Not read yet.
 
-For 1 to 3, mark the check as read: `el_watch_seen` or `el_harness_seen`.
+For 1 to 3, mark the check as read: `el_seen` with the `item_id`.
 For 4, mark nothing and schedule nothing. Say they can say "I've read it" any time, and ask about frequency then.
 
 For 1 or 2, create one job with the `cronjob` tool, so results come back to this chat:
@@ -109,16 +109,16 @@ For 1 or 2, create one job with the `cronjob` tool, so results come back to this
 - `prompt`: exactly the text below
 
 ```text
-Call el_harness_check with no arguments, then el_watch_check with no arguments, to check the user's saved EquityLayer theses and watchlists that are due. If report_total is 0 in both, respond with only [SILENT]. Otherwise show each markdown as returned, keeping every needs-you item, status, new reading, event, caveat and source. Then stop: do not add an interpretation, do not change anything, and never call el_harness_seen or el_watch_seen. Never say what to buy, sell, size or time. End with: say "I've read it" once you have read it.
+Call el_check with no arguments to check everything the user tracks with EquityLayer that is due: readings, their own theses and followed Research Packs. If report_total is 0, respond with only [SILENT]. Otherwise show the markdown as returned, keeping every needs-you item, status, new reading, event, caveat and source. Then stop: do not add an interpretation, do not change anything, and never call el_seen. Never say what to buy, sell, size or time. End with: say "I've read it" once you have read it.
 ```
 
 - Do not run the job now.
-- Check `cronjob` `list` first. If any job's name starts with "EquityLayer", do not add a second one: `update` that job with the schedule, timezone, skills and the exact prompt above, because older jobs carry an older prompt that skips watchlists. If several exist, update one and tell the person the others' names so they can remove them.
+- Check `cronjob` `list` first. If any job's name starts with "EquityLayer", do not add a second one: `update` that job with the schedule, timezone, skills and the exact prompt above, because older jobs carry an older prompt. If several exist, update one and tell the person the others' names so they can remove them.
 - If the `cronjob` tool is not available, show the line from `/el schedule`.
 
 ## Remember and close
 
-Call `el_profile_save` with what they chose: `sectors`, `path` (curated, own_view or formed_view), `check`, `check_time`, `timezone`, and `language` only when they wrote in a language other than English.
+Call `el_profile` with what they chose: `sectors`, `path` (curated, own_view or formed_view), `check`, `check_time`, `timezone`, and `language` only when they wrote in a language other than English.
 
 Then call `el_dashboard_render` again, so the dashboard shows the schedule, and close in three lines:
 - What is saved (this machine only), and where the dashboard lives: the path the tool returned; reopen it with `/el dashboard` or from Artifacts, no need to scroll back to the preview.

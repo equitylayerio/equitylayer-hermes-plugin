@@ -29,7 +29,7 @@ HEADER = (
 )
 FOOTER = (
     "You may name these and their last check dates. For link statuses, readings or what needs the user, "
-    "open the harness with el_harness_list(harness_id) or check it with el_harness_check(harness_id): this "
+    "open the item with el_list(item_id) or check it with el_check(item_id): this "
     "list is a pointer, not evidence, so never quote statuses or readings from it."
 )
 EMPTY = "No EquityLayer thesis harness is saved on this machine yet."
@@ -72,7 +72,7 @@ def _watch_lines(watchlists: list[dict] | None) -> list[str]:
         state = "last check not yet read" if isinstance(record.get("pending"), dict) else (
             "due" if is_watch_due(record) else "waiting")
         lines.append(f"- watchlist {_safe_id(record.get('id'))}: \"{_one_line(record.get('title'))}\" "
-                     f"(last check {checked}; {state}; open with el_watch_list)")
+                     f"(last check {checked}; {state})")
     return lines
 
 
@@ -86,7 +86,7 @@ def render(records: list[dict], unreadable: list[str] | None = None, profile: di
         return "\n".join([*profile_line, EMPTY, START_HINT])
     tail = []
     if unreadable:
-        tail.append(f"- {len(unreadable)} local file(s) could not be read; el_harness_list names them.")
+        tail.append(f"- {len(unreadable)} local file(s) could not be read; el_list names them.")
     tail.append(FOOTER)
     entries = []
     for record in records:
@@ -98,12 +98,12 @@ def render(records: list[dict], unreadable: list[str] | None = None, profile: di
     shown = entries[:MAX_LISTED]
     while shown:
         hidden = len(entries) - len(shown)
-        more = [f"- … and {hidden} more; el_harness_list shows all."] if hidden else []
+        more = [f"- … and {hidden} more; el_list shows all."] if hidden else []
         text = "\n".join([*profile_line, HEADER, *watch_lines, *shown, *more, *tail])
         if len(text) <= MAX_CHARS:
             return text
         shown = shown[:-1]
-    return "\n".join([*profile_line, HEADER, *watch_lines, f"- {len(entries)} saved; el_harness_list shows them.", *tail])
+    return "\n".join([*profile_line, HEADER, *watch_lines, f"- {len(entries)} saved; el_list shows them.", *tail])
 
 
 def make_section(

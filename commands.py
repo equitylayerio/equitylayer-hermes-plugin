@@ -12,19 +12,11 @@ RESEARCH_SKILL = "equitylayer:equitylayer-research"
 
 THESIS_CRON_NAME = "EquityLayer daily check"
 THESIS_CRON_PROMPT = (
-    "Call el_harness_check with no arguments, then el_watch_check with no arguments, to check the user's saved "
-    "EquityLayer theses and watchlists that are due. If report_total is 0 in both, respond with only [SILENT]. "
-    "Otherwise show each markdown as returned, keeping every needs-you item, status, new reading, event, caveat and "
-    "source. Then stop: do not add an interpretation, do not change anything, and never call el_harness_seen or "
-    "el_watch_seen. Never say what to buy, sell, size or time. End with: say \"I've read it\" once you have read it."
-)
-FOLLOW_CRON_NAME = "EquityLayer follow check"
-FOLLOW_CRON_PROMPT = (
-    "Call el_follow_check with no arguments to check local EquityLayer Follow Cards that are due. "
-    "If no result needs review and none failed, respond with only [SILENT]. Otherwise summarize each "
-    "update using only figures and sources from the tool result, and tell the user to review it and run "
-    "/el follow-check <follow_id> --accept. Never set accept_next. Never pay or authenticate. "
-    "This is research evidence, not investment advice."
+    "Call el_check with no arguments to check everything the user tracks with EquityLayer that is due: readings, "
+    "their own theses and followed Research Packs. If report_total is 0, respond with only [SILENT]. Otherwise show "
+    "the markdown as returned, keeping every needs-you item, status, new reading, event, caveat and source. Then "
+    "stop: do not add an interpretation, do not change anything, and never call el_seen. Never say what to buy, "
+    "sell, size or time. End with: say \"I've read it\" once you have read it."
 )
 
 START_TEXT = """**Start researching with EquityLayer**
@@ -33,26 +25,15 @@ Type `/equitylayer:start`, or say "Help me start researching with EquityLayer". 
 
 It never says what to buy, sell, size or time."""
 
-HELP = """**EquityLayer: track your own thesis**
+HELP = """**EquityLayer**
 
-- `/equitylayer:start`: guided setup, one question at a time (start here)
-- `/el profile`: your saved research profile (sectors, check time, language)
-- `/el dashboard`: write the local dashboard and show where it is
-- `/el watches` · `/el watch-check [id]` · `/el watch-seen <id>` · `/el unwatch <id>`: curated readings you follow
-- `/el plan [--theme optical_cpo] [--company 3363.TWO] <your thesis>`: find catalog variables that could track it (nothing is stored)
-- `/el var <variable id>`: read a variable's unit, caveat and recent readings
-- `/el theses`: list the harnesses saved on this machine
-- `/el show <id>`: show a harness's four parts
-- `/el check [id]`: check one harness now, or every harness that is due
-- `/el seen <id>`: mark the last check as read, so it becomes your baseline
-- `/el remove <id>`: delete a harness from this machine
-- `/el schedule [HH:MM] [Area/City]`: check due harnesses every day
+- `/equitylayer:start` or `/el start`: guided setup in four decisions (start here)
+- `/el dashboard`: your dashboard (the thesis first, readings as evidence)
+- `/el check [id]`: check everything due now, or one item; you read it, so it becomes your baseline
+- `/el seen <id>`: mark an item's last check as read
+- `/el list`: everything you track, with its level (readings, your thesis, EquityLayer thesis)
 
-**Published research (secondary)**
-
-- `/el registry`: list current Research Packs (may be empty)
-- `/el pack <pack_id>` · `/el scorecard <id>` · `/el follow <id>` · `/el follows` · `/el follow-check [id] [--accept]` · `/el unfollow <id>`
-
+Everything else works in plain words: "add a thesis to my CPO readings", "is there a Research Pack for CPO?".
 EquityLayer reports what moved and stops. You own the judgment. Not investment advice."""
 
 
@@ -103,8 +84,8 @@ def _watch_check_as_person(service: EquityLayerTools, args: dict) -> dict:
 
 
 def _check_as_person(service: EquityLayerTools, args: dict) -> dict:
-    # A slash command's output goes straight to the person, so the check counts as read.
-    return service._harness_check(args, seen=True)
+    """A slash-command check is read by the person, so it becomes the baseline."""
+    return service._check(args, seen=True)
 
 
 def _cron_command(schedule: str, prompt: str, skill: str, name: str, timezone: str) -> str:
@@ -120,19 +101,16 @@ def schedule_text(time_of_day: str = "09:00", timezone: str = "Asia/Taipei") -> 
     if not (0 <= hour_n <= 23 and 0 <= minute_n <= 59):
         raise ValueError(time_of_day)
     schedule = f"{minute_n} {hour_n} * * *"
-    thesis = _cron_command(schedule, THESIS_CRON_PROMPT, HARNESS_SKILL, THESIS_CRON_NAME, timezone)
-    follow = _cron_command(schedule, FOLLOW_CRON_PROMPT, RESEARCH_SKILL, FOLLOW_CRON_NAME, timezone)
+    command = _cron_command(schedule, THESIS_CRON_PROMPT, HARNESS_SKILL, THESIS_CRON_NAME, timezone)
     return (
-        "**Schedule EquityLayer thesis checks**\n\n"
+        "**Schedule the EquityLayer daily check**\n\n"
         "In a Hermes session, fill in the blueprint:\n\n"
-        "```text\n/blueprint equitylayer:thesis-check\n```\n\n"
+        "```text\n/blueprint equitylayer:daily-check\n```\n\n"
         "Or from a terminal:\n\n"
-        f"```bash\n{thesis}\n```\n\n"
-        "The job runs daily but only contacts EquityLayer for harnesses whose next due date has arrived. It stays "
-        "silent when nothing moved and nothing needs you, never marks a check as read, never edits your harness, "
-        "and never pays.\n\n"
-        "For followed Research Packs (when one is published): `/blueprint equitylayer:follow-check`, or\n\n"
-        f"```bash\n{follow}\n```"
+        f"```bash\n{command}\n```\n\n"
+        "One job covers everything you track: readings, your theses and followed Research Packs. It only contacts "
+        "EquityLayer for items that are due, stays silent when nothing is new, never marks a check as read, never "
+        "edits a thesis, and never pays."
     )
 
 
@@ -158,6 +136,12 @@ def make_slash_handler(service: EquityLayerTools):
         # Your own thesis
         if command in ("start", "setup", "onboard"):
             return START_TEXT
+        if command == "check":
+            return _render(run(_check_as_person, {"item_id": first}))
+        if command == "seen":
+            return _render(run(EquityLayerTools._seen, {"item_id": first}))
+        if command in ("list", "items", "theses", "watches"):
+            return _render(run(EquityLayerTools._list, {"item_id": first}))
         if command == "profile":
             return _render(run(EquityLayerTools._profile_get, {}))
         if command == "dashboard":
@@ -242,24 +226,13 @@ def register_blueprints(ctx: Any) -> None:
          "options": ["origin", "local"], "strict": False},
     ]
     ctx.register_automation_blueprint(
-        "thesis-check",
+        "daily-check",
         title=THESIS_CRON_NAME,
-        description="Every day, check your saved watchlists and theses that are due. Silent unless something is new or needs you.",
+        description="Every day, check what you track with EquityLayer (readings, your theses, followed Research Packs). Silent unless something is new or needs you.",
         category="research",
         schedule_template="{minute} {hour} * * *",
         prompt_template=THESIS_CRON_PROMPT,
         slots=slots,
         skills=[HARNESS_SKILL],
         tags=["research", "finance", "thesis"],
-    )
-    ctx.register_automation_blueprint(
-        "follow-check",
-        title=FOLLOW_CRON_NAME,
-        description="Every day, check local EquityLayer Follow Cards that are due and report only real updates.",
-        category="research",
-        schedule_template="{minute} {hour} * * *",
-        prompt_template=FOLLOW_CRON_PROMPT,
-        slots=slots,
-        skills=[RESEARCH_SKILL],
-        tags=["research", "finance"],
     )
