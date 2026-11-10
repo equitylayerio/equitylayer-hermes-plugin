@@ -119,7 +119,7 @@ def test_follow_create_twice_keeps_the_original_baseline(make_service):
     first = call(service.el_follow_create, {"pack_id": PACK})
     second = call(service.el_follow_create, {"pack_id": PACK})
     assert second["already_following"] is True and second["follow_id"] == first["follow_id"]
-    assert transport.names() == ["create_research_follow"]
+    assert transport.names() == ["create_research_follow", "get_research_pack"]  # the Pack is read once
     assert len(store.all()[0]) == 1
 
 
@@ -161,7 +161,8 @@ def test_review_required_does_not_overwrite_card_until_accepted(make_service):
     # Pack cards move on through create_research_follow, as caller_action.next_tool says.
     accepted = call(service.el_follow_check, {"follow_id": follow_id, "accept_next": True})
     assert accepted["accepted"] is True and accepted["previous_follow_id"] == follow_id
-    assert transport.calls[-1] == ("create_research_follow", {"pack_id": PACK})
+    assert transport.calls[-2] == ("create_research_follow", {"pack_id": PACK})
+    assert transport.calls[-1][0] == "get_research_pack"  # the new version may change the hypotheses
     assert store.get(accepted["follow_id"])["pending_review"] is None
 
 

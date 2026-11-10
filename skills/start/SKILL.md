@@ -30,7 +30,7 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
   3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings stay under the same id and become the thesis's evidence.
   4. Add a sector.
   Skip any decision already answered.
-- If the registry lists a Research Pack, note it inside the matching sector option, so decision 1 keeps four options: a published one as "CPO and optical networking: EquityLayer Pack available"; one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector whose Pack is published, offer it as the first way to follow it in decision 2: read it with `el_research_pack` (action `read`) and, on yes, follow it with `el_track` (`pack_id`). An in-review Pack cannot be read or followed yet; say so and go on.
+- If the registry lists a Research Pack, note it inside the matching sector option, so decision 1 keeps four options: a published one as "CPO and optical networking: EquityLayer Pack available"; one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector whose Pack is published, decision 2 gets it as option 1 (see there). An in-review Pack cannot be read or followed yet; say so and go on.
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
@@ -55,7 +55,13 @@ Save the sector to the profile either way, so a later visit can check again.
 
 ## Decision 2. How do you want to follow it?
 
-1. **Follow the curated readings (recommended).** No view needed. I tell you what moved at each check, and you can add a view later.
+**If EquityLayer has published a Research Pack for the sector,** it comes first:
+
+1. **Follow EquityLayer's Research Pack (recommended):** its title, in one line. EquityLayer's own thesis for the sector, verified by its research team, with what would prove each part wrong and the readings it watches.
+
+Then the options below, numbered 2 to 4. Without a published Pack, they are 1 to 3:
+
+1. **Follow the curated readings** (recommended when there is no Pack). No view needed. I tell you what moved at each check, and you can add a view later.
 2. **I have a view.** They write it in one sentence in their own words.
 3. **Help me form a view.** Ask up to three short questions, one per message:
    - What do you expect to happen?
@@ -66,6 +72,12 @@ Save the sector to the profile either way, so a later visit can check again.
 A view takes a stand and could be wrong.
 
 ## Decision 3. One card to approve
+
+**For a Research Pack:** call `el_research_pack` (action `read`, its `pack_id`). Show one card, not the whole Pack:
+- its title and view, in one or two sentences;
+- each hypothesis in one plain line, with its confidence, what would prove it wrong and by when;
+- the readings it watches, and one line on what it does not cover.
+Ask them to reply "yes" or ask about it. On yes, call `el_track` with the `pack_id`. It follows the Pack and the readings it watches as one item, with one `item_id`.
 
 **For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), and mix categories: at least one demand reading, one capacity reading (capex) and one pricing reading (gross margin) when the plan has them, plus Taiwan monthly revenue. One line each: latest level, what it tells about the sector (in one plain clause), and its caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_track` with the title, the variable ids and the theme.
 
@@ -80,7 +92,7 @@ On yes, call `el_track` with the harness. If EquityLayer rejects a word, say so 
 **Then check once:**
 - `el_check` with the `item_id` that `el_track` returned.
 
-Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and copy its `::preview{...}` line exactly, on a line of its own: the dashboard now follows these readings; it is built on this machine and contacts no one.
+Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and copy its `::preview{...}` line exactly, on a line of its own: the dashboard now shows what they follow (for a Pack, its thesis on top and the readings it watches below); it is built on this machine.
 
 For a view, explain the statuses in one line:
 - 🟢 seen
@@ -96,7 +108,7 @@ For a view, explain the statuses in one line:
 3. I've read it; only when I ask.
 4. Not read yet.
 
-For 1 to 3, mark the check as read: `el_seen` with the `item_id` (readings or their own thesis). For a followed Research Pack there is nothing to mark; `el_seen` with `accept_update` is only for accepting a Pack update the person explicitly agreed to.
+For 1 to 3, mark the check as read: `el_seen` with the `item_id` (readings, their own thesis, or a followed Pack, whose readings it marks). `accept_update` is only for accepting a Pack update the person explicitly agreed to.
 For 4, mark nothing and schedule nothing. Say they can say "I've read it" any time, and ask about frequency then.
 
 For 1 or 2, create one job with the `cronjob` tool, so results come back to this chat:

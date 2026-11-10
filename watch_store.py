@@ -140,6 +140,14 @@ class WatchStore:
         self._write(self._path(watch_id), record)
         return record
 
+    def link_follow(self, watch_id: str, follow_id: str | None) -> None:
+        """Mark a watchlist as the readings a followed Research Pack watches (same tracked item)."""
+        record = self.get(watch_id)
+        if record is None:
+            raise KeyError(watch_id)
+        record["follow_id"] = follow_id
+        self._write(self._path(watch_id), record)
+
     def delete(self, watch_id: str) -> bool:
         path = self._path(watch_id)
         if not path.exists():

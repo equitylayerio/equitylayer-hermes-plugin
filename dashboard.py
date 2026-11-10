@@ -227,6 +227,31 @@ def _thesis_hero(record: dict) -> str:
             f'<p class="hero-text">{_e(harness.get("hypothesis"))}</p>{status}</section>')
 
 
+def _pack_hero(record: dict) -> str:
+    """A followed Pack at the top: EquityLayer's thesis, what would prove each part wrong, and when it is checked."""
+    summary = record.get("pack") if isinstance(record.get("pack"), dict) else {}
+    label = THEME_LABELS.get(summary.get("theme_id")) if summary.get("theme_id") in THEME_LABELS else None
+    items = ""
+    for h in (summary.get("hypotheses") or [])[:4]:
+        if not isinstance(h, dict):
+            continue
+        wrong = (f'<br><span class="muted small">Would be wrong if: {_e(h.get("falsifier"))}'
+                 + (f" (by {_e(h.get('due'))})" if h.get("due") else "") + "</span>") if h.get("falsifier") else ""
+        items += (f'<li>{_e(h.get("statement"))} <span class="tag">confidence {_e(h.get("confidence") or "—")}</span>'
+                  f'{wrong}</li>')
+    if record.get("pending_review"):
+        status = '<p><span class="verdict v-warn">Update to review</span></p>'
+    else:
+        status = (f'<p class="muted small">Next check {_e(record.get("next_check_at") or record.get("fresh_until") or "—")}'
+                  " · the readings it watches are below as evidence.</p>")
+    url = _https(summary.get("url"))
+    link = f'<p><a class="go" href="{_e(url)}">Read the full Pack on equitylayer.io →</a></p>' if url else ""
+    return (f'<section class="card hero pack"><p class="eyebrow">EquityLayer thesis' + (f" · {_e(label)}" if label else "")
+            + f' · you follow it</p><h3>{_e(summary.get("title"))}</h3>'
+            + (f'<p class="hero-text pack-view">{_e(summary.get("view"))}</p>' if summary.get("view") else "")
+            + (f'<ol class="hyp">{items}</ol>' if items else "") + status + link + "</section>")
+
+
 def _change_pct(row: dict) -> float | None:
     match = re.match(r"^([+-]\d+(?:\.\d+)?)%", str(row.get("change") or ""))
     return float(match.group(1)) if match else None
@@ -320,13 +345,13 @@ def _pack_url(entry: dict) -> str | None:
 
 
 def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str, dict],
-                packs_as_of: str | None = None) -> list[str]:
+                packs_as_of: str | None = None, skip: set[str] | None = None) -> list[str]:
     """One card per sector: a Pack the user follows, a published Pack they can follow, or where the sector stands.
 
     `packs` is the last registry the plugin saw (None when it has never seen one). A sector with no listed Pack only
     says that none is published; whether one is coming is the sector page's to say.
     """
-    cards, shown = [], set()
+    cards, shown = [], set(skip or ())
     entries, seen_ids = [], set()
     for p in packs or []:
         if isinstance(p, dict) and p.get("kind") == "pack" and p.get("id") and p["id"] not in seen_ids:
@@ -342,13 +367,14 @@ def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str,
         mine = [p for p in entries if p.get("theme_id") == theme]
         label = _theme_label(theme)
         page = SECTOR_PAGES.get(theme, SITE)
-        mine_followed = [p for p in mine if p["id"] in followed]
+        heroes = [p for p in mine if p["id"] in (skip or ())]
+        mine_followed = [p for p in mine if p["id"] in followed and p["id"] not in shown]
         published = [p for p in mine if p["id"] not in followed and p.get("status") == "verified"
                      and p.get("access") == "public" and _pack_id(p.get("id"))]
         for p in (mine_followed + published)[:2]:
             shown.add(p["id"])
             cards.append(_pack_card(p, label, followed.get(p["id"]), as_of))
-        if mine_followed or published:
+        if heroes or mine_followed or published:
             continue
         restricted = [p for p in mine if p.get("status") == "verified" and p.get("access") != "public"]
         review = [p for p in mine if p.get("status") == "in_review"]
@@ -417,6 +443,11 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                              "unread check" if isinstance(record.get("pending_baseline"), dict) else "",
                              f'{_e(last.get("needs_human"))} item(s) only you can judge' if last.get("needs_human") else "",
                              "a wrong_if fired" if last.get("wrong_if_fired") else "") if x) + "</li>")
+    for record in followed.values():
+        if record.get("pending_review"):
+            title = (record.get("pack") or {}).get("title") or record.get("target_id")
+            needs.append(f'<li>EquityLayer Research Pack <b>{_e(title)}</b>: an update to review. Ask Hermes to '
+                         'check it; it moves to the new version only when you say so.</li>')
     for record in watchlists:
         if isinstance(record.get("pending"), dict):
             new = ((record.get("last_check") or {}).get("new_count") or 0)
@@ -457,8 +488,15 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                             "last_check": {"as_of": preview.get("as_of"), "rows": preview.get("rows") or [],
                                            "new_count": None, "next_due": "after you save"}})
         card = re.sub(r'<span class="tag[^"]*">[^<]*</span>', '<span class="tag">preview, not saved</span>', card, count=1)
+        pack = next((p for p in packs or [] if isinstance(p, dict) and p.get("kind") == "pack"
+                     and p.get("theme_id") == preview.get("theme") and p.get("status") == "verified"
+                     and p.get("access") == "public" and _pack_id(p.get("id")) and p.get("id") not in followed), None)
+        readings_class = ' class="ghost"' if pack else ""
         actions = ('<div class="actions">'
-                   '<button type="button" data-hermes-send="Yes, follow these curated readings.">Follow these readings</button>'
+                   + ('<button type="button" data-hermes-send="Yes, follow EquityLayer\'s Research Pack.">'
+                      "Follow EquityLayer's Research Pack</button>" if pack else "")
+                   + f'<button type="button"{readings_class} data-hermes-send="Yes, follow these curated readings.">'
+                   'Follow these readings</button>'
                    '<button type="button" class="ghost" data-hermes-send="I have my own view.">I have my own view</button>'
                    '</div>')
         body.append('<h2 id="live">Live now</h2>' + card + actions)
@@ -469,13 +507,15 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["watch"].append(record)
     for record in theses:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
-    heroes = [_thesis_hero(r) for r in theses[:3]] or [h for h in (_readings_hero(r) for r in watchlists[:2]) if h]
+    pack_heroes = {pid: _pack_hero(r) for pid, r in followed.items() if isinstance(r.get("pack"), dict)}
+    own = [_thesis_hero(r) for r in theses[:3]] or [h for h in (_readings_hero(r) for r in watchlists[:2]) if h]
+    heroes = list(pack_heroes.values())[:2] + own
     if heroes:
         body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
-    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of)
+    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(list(pack_heroes)[:2]))
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:
@@ -537,7 +577,7 @@ border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 .actions{{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
-.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
+.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.pack-view{{font-size:19px;line-height:1.35}}.hyp{{margin:10px 0 6px;padding-left:20px}}.hyp li{{margin:8px 0;line-height:1.45}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
 a{{color:var(--forest-2)}}footer{{margin-top:28px}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}

@@ -155,3 +155,71 @@ def test_updating_readings_keeps_title_and_cron_cannot_change_items(make_service
     assert updated["ok"] and "CPO readings" in updated["markdown"]
     cron, _, _ = make_service(ROUTES, in_cron=True)
     assert call(cron.el_track, {"title": "x", "variables": [FOCI]})["error"] == "not_in_scheduled_run"
+
+
+PACK_ID = "taiwan-optical-revenue-vs-cpo-guidance"
+PACK_ROUTES = {**ROUTES, "get_research_pack": "get_research_pack_cpo_v1", "check_research_follow": "check_follow_current",
+               "list_registry": "list_registry_cpo", "create_research_follow": "create_follow_pack_cpo"}
+
+
+def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service, tmp_path):
+    from equitylayer_plugin.commands import _remove_item
+
+    service, _, store = make_service(PACK_ROUTES)
+    followed = call(service.el_track, {"pack_id": PACK_ID})
+    fid = followed["item_id"]
+    assert followed["ok"] and followed["level"] == "EquityLayer thesis"
+    assert "Now following EquityLayer's Research Pack:** What Taiwan" in followed["markdown"]
+    record = store.get(fid)
+    assert len(record["pack"]["hypotheses"]) == 3 and record["pack"]["theme_id"] == "optical_cpo"
+    assert record["pack"]["variables"] == ["v:3081.two.revenue.monthly", "v:3163.two.revenue.monthly",
+                                           "v:3363.two.revenue.monthly"]
+    readings_id = record["readings_id"]
+    watch = json.loads((tmp_path / "watchlists" / f"{readings_id}.json").read_text())
+    assert watch["follow_id"] == fid and watch["theme"] == "optical_cpo"
+    assert watch["title"] == "CPO Pack: the readings it watches"
+    assert [(i["id"], i["level"]) for i in call(service.el_list)["items"]] == [(fid, "EquityLayer thesis + readings")]
+
+    check = call(service.el_check, {"item_id": fid})
+    text = check["markdown"]
+    assert text.startswith("## EquityLayer thesis: What Taiwan") and "Would be wrong if:" in text
+    assert "current. None of the readings it watches has moved" in text and "Follow Card" not in text
+    assert check["awaiting_read"] == [readings_id] and check["level"] == "EquityLayer thesis"
+    assert call(service.el_seen, {"item_id": fid})["ok"]
+    assert json.loads((tmp_path / "watchlists" / f"{readings_id}.json").read_text())["pending"] is None
+
+    page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
+    glance = page[page.index("At a glance"):page.index("Evidence")]
+    assert "EquityLayer thesis · CPO and optical networking · you follow it" in glance
+    assert "Would be wrong if:" in glance and "LandMark, a laser epi supplier" in glance
+    assert "Follow this Pack" not in page and "has not published" not in page
+    assert "CPO Pack: the readings it watches" in page[page.index("Evidence"):]
+
+    assert _remove_item(service, {"item_id": fid})["ok"]
+    assert store.get(fid) is None and not (tmp_path / "watchlists" / f"{readings_id}.json").exists()
+
+
+def test_the_pack_readings_id_reaches_the_whole_item(make_service):
+    service, _, store = make_service(PACK_ROUTES)
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    readings_id = store.get(fid)["readings_id"]
+    check = call(service.el_check, {"item_id": readings_id})
+    assert check["markdown"].startswith("## EquityLayer thesis:") and check["level"] == "EquityLayer thesis"
+    refused = call(service.el_track, {"item_id": readings_id, "variables": [FOCI]})
+    assert refused["error"] == "invalid_argument" and "followed Research Pack" in refused["message"]
+
+
+def test_a_pack_that_cannot_be_read_is_still_followed(make_service):
+    service, _, store = make_service({**ROUTES, "get_research_pack": 503})
+    followed = call(service.el_track, {"pack_id": PACK_ID})
+    assert followed["ok"] and "pack" not in store.get(followed["item_id"])
+    assert "readings_id" not in store.get(followed["item_id"])
+
+
+def test_preview_puts_a_published_pack_first(make_service):
+    service, _, _ = make_service(PACK_ROUTES)
+    page = open(call(service.el_dashboard_render, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+                ["artifact_file"], encoding="utf-8").read()
+    actions = page[page.index('<div class="actions">'):]
+    assert actions.index("Follow EquityLayer's Research Pack") < actions.index("Follow these readings")
+    assert 'class="ghost" data-hermes-send="Yes, follow these curated readings."' in actions

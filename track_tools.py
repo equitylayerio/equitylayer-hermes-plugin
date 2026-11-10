@@ -17,6 +17,7 @@ import logging
 from typing import Any, Callable
 
 from .follows import FOLLOW_ID_RE
+from . import formatters
 from .formatters import _table
 from .harness_store import HARNESS_ID_RE, is_due, slugify
 from .profile_store import FIELDS as PROFILE_FIELDS
@@ -66,12 +67,28 @@ class TrackTools:
             record = self._safe_get(self._store_factory().get, item_id)
             if record:
                 parts["follow"] = record
+                # A followed Pack's readings are its evidence: one item, two files.
+                readings_id = record.get("readings_id")
+                watch = self._safe_get(self._watch_store_factory().get, readings_id) if isinstance(readings_id, str) else None
+                if watch:
+                    parts["watch"] = watch
             return parts
         for kind, getter in (("harness", self._harness_store_factory().get), ("watch", self._watch_store_factory().get)):
             record = self._safe_get(getter, item_id)
             if record:
                 parts[kind] = record
+        follow_id = (parts.get("watch") or {}).get("follow_id")
+        if isinstance(follow_id, str) and FOLLOW_ID_RE.match(follow_id):
+            record = self._safe_get(self._store_factory().get, follow_id)
+            if record:
+                parts["follow"] = record
         return parts
+
+    @staticmethod
+    def _part_id(parts: dict, kind: str, item_id: str) -> str:
+        """The file id of one part; a followed Pack and its readings have different file ids."""
+        record = parts.get(kind) or {}
+        return str(record.get("follow_id" if kind == "follow" else "id") or item_id)
 
     @staticmethod
     def _safe_get(getter: Callable[[str], Any], item_id: str) -> dict | None:
@@ -206,12 +223,13 @@ class TrackTools:
             parts = self._parts(item_id)
             if not parts:
                 return self._unknown_item(item_id)
+            harness_id, watch_id, follow_id = (self._part_id(parts, k, item_id) for k in ("harness", "watch", "follow"))
+            if "follow" in parts:  # the Pack first, then the readings that back it
+                calls.append(("followed Research Packs", lambda: self._follow_check({"follow_id": follow_id})))
             if "harness" in parts:
-                calls.append(("theses", lambda: self._harness_check({"harness_id": item_id}, seen=seen)))
+                calls.append(("theses", lambda: self._harness_check({"harness_id": harness_id}, seen=seen)))
             if "watch" in parts:
-                calls.append(("readings", lambda: self._watch_check({"watch_id": item_id}, seen=seen)))
-            if "follow" in parts:
-                calls.append(("followed Research Packs", lambda: self._follow_check({"follow_id": item_id})))
+                calls.append(("readings", lambda: self._watch_check({"watch_id": watch_id}, seen=seen)))
         else:
             if self._harness_store_factory().all()[0]:
                 calls.append(("theses", lambda: self._harness_check({}, seen=seen)))
@@ -227,6 +245,9 @@ class TrackTools:
             if (count or item_id) and markdown:
                 blocks.append(markdown)
         self._refresh_dashboard()
+        summary = (parts.get("follow") or {}).get("pack") if item_id else None
+        if isinstance(summary, dict):
+            blocks.insert(0, formatters.format_pack_thesis(summary))
         if not calls:
             markdown = NOTHING_TRACKED
         else:
@@ -248,20 +269,21 @@ class TrackTools:
         parts = self._parts(item_id)
         if not parts:
             return self._unknown_item(item_id)
-        if "follow" in parts:
+        if "follow" in parts and args.get("accept_update"):
             # Moving to a new Pack version is an explicit choice, not the same as "I've read it".
-            if not args.get("accept_update"):
-                return {"ok": False, "error": "accept_needs_confirmation", "item_id": item_id,
-                        "message": "This followed Pack has an update to review. Ask the person whether to accept it; "
-                                   "only then call el_seen with accept_update true."}
-            result = self._accept_next(item_id)
-            new_id = result.get("follow_id") or item_id
-            return {**result, "item_id": new_id, "previous_item_id": item_id, "level": PACK}
+            follow_id = self._part_id(parts, "follow", item_id)
+            result = self._accept_next(follow_id)
+            new_id = result.get("follow_id") or follow_id
+            return {**result, "item_id": new_id, "previous_item_id": follow_id, "level": PACK}
+        if "follow" in parts and "watch" not in parts and "harness" not in parts:
+            return {"ok": False, "error": "accept_needs_confirmation", "item_id": item_id,
+                    "message": "A followed Pack has nothing to mark as read. If it has an update to review, ask the "
+                               "person whether to accept it; only then call el_seen with accept_update true."}
         results = []
         if "harness" in parts:
-            results.append(self._harness_seen({"harness_id": item_id}))
+            results.append(self._harness_seen({"harness_id": self._part_id(parts, "harness", item_id)}))
         if "watch" in parts:
-            results.append(self._watch_seen({"watch_id": item_id}))
+            results.append(self._watch_seen({"watch_id": self._part_id(parts, "watch", item_id)}))
         done = [r for r in results if r.get("ok")]
         if not done:
             first = results[0]
@@ -281,13 +303,16 @@ class TrackTools:
             if not parts:
                 return self._unknown_item(item_id)
             blocks = []
-            if "harness" in parts:
-                blocks.append(str(self._harness_list({"harness_id": item_id}).get("markdown") or ""))
-            if "watch" in parts:
-                blocks.append(str(self._watch_list({"watch_id": item_id}).get("markdown") or ""))
             if "follow" in parts:
                 record = parts["follow"]
+                summary = record.get("pack") if isinstance(record.get("pack"), dict) else None
+                blocks.append(formatters.format_pack_thesis(summary) if summary else "")
                 blocks.append(f"Following `{record.get('target_id')}` (next check {record.get('next_check_at') or 'unknown'}).")
+            if "harness" in parts:
+                blocks.append(str(self._harness_list({"harness_id": self._part_id(parts, "harness", item_id)}).get("markdown") or ""))
+            if "watch" in parts:
+                blocks.append(str(self._watch_list({"watch_id": self._part_id(parts, "watch", item_id)}).get("markdown") or ""))
+            blocks = [b for b in blocks if b]
             return {"ok": True, "item_id": item_id, "level": _level(parts), "markdown": "\n\n---\n\n".join(blocks)}
 
         items: list[dict[str, Any]] = []
@@ -302,16 +327,19 @@ class TrackTools:
             items.append({"id": r.get("id"), "title": r.get("title"),
                           "level": THESIS + (" + readings" if readings else ""),
                           "last_check": last.get("as_of") or "never", "state": state})
+        follows, bad_f = self._store_factory().all()
+        for r in follows:
+            readings = watch_by_id.pop(r.get("readings_id"), None) if r.get("readings_id") else None
+            unread = bool(readings and isinstance(readings.get("pending"), dict))
+            state = "update to review" if r.get("pending_review") else ("unread" if unread else "following")
+            items.append({"id": r.get("follow_id"), "title": (r.get("pack") or {}).get("title") or r.get("target_id"),
+                          "level": PACK + (" + readings" if readings else ""),
+                          "last_check": r.get("last_checked_at") or "never", "state": state})
         for r in watch_by_id.values():
             last = r.get("last_check") if isinstance(r.get("last_check"), dict) else {}
             state = "unread" if isinstance(r.get("pending"), dict) else ("due" if is_watch_due(r) else "waiting")
             items.append({"id": r.get("id"), "title": r.get("title"), "level": READINGS,
                           "last_check": last.get("as_of") or "never", "state": state})
-        follows, bad_f = self._store_factory().all()
-        for r in follows:
-            items.append({"id": r.get("follow_id"), "title": r.get("target_id"), "level": PACK,
-                          "last_check": r.get("last_checked_at") or "never",
-                          "state": "update to review" if r.get("pending_review") else "following"})
         table = _table(["id", "title", "level", "last check", "state"],
                        [[i["id"], i["title"], i["level"], i["last_check"], i["state"]] for i in items])
         unreadable = len(bad_h or []) + len(bad_w or []) + len(bad_f or [])

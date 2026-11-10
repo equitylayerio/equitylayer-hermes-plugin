@@ -91,11 +91,11 @@ def _remove_item(service: EquityLayerTools, args: dict) -> dict:
     if not parts:
         return service._unknown_item(item_id)
     if "harness" in parts:
-        service._harness_remove({"harness_id": item_id})
+        service._harness_remove({"harness_id": service._part_id(parts, "harness", item_id)})
     if "watch" in parts:
-        service._watch_remove({"watch_id": item_id})
+        service._watch_remove({"watch_id": service._part_id(parts, "watch", item_id)})
     if "follow" in parts:
-        service._follow_remove({"follow_id": item_id})
+        service._follow_remove({"follow_id": service._part_id(parts, "follow", item_id)})
     service._refresh_dashboard()
     return {"ok": True, "markdown": f"Removed `{item_id}` from this machine."}
 

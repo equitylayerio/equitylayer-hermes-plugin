@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from .harness_store import HARNESS_ID_RE, HarnessStore, default_harness_store, is_due
 from .profile_store import ProfileStore, default_profile_store, describe
+from .follows import FOLLOW_ID_RE
 from .watch_store import WatchStore, default_watch_store, is_watch_due
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,11 @@ def _watch_lines(watchlists: list[dict] | None) -> list[str]:
         checked = _safe_date(last.get("as_of")) or "never checked"
         state = "last check not yet read" if isinstance(record.get("pending"), dict) else (
             "due" if is_watch_due(record) else "waiting")
+        follow_id = record.get("follow_id")
+        pack = (f"; the readings of followed EquityLayer Pack {follow_id}"
+                if isinstance(follow_id, str) and FOLLOW_ID_RE.match(follow_id) else "")
         lines.append(f"- watchlist {_safe_id(record.get('id'))}: \"{_one_line(record.get('title'))}\" "
-                     f"(last check {checked}; {state})")
+                     f"(last check {checked}; {state}{pack})")
     return lines
 
 

@@ -23,6 +23,7 @@ from .follows import FollowStore, apply_caller_action, build_record, default_sto
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
 
 PACK_INDEX = "packs.json"
+PACK_SHORT = {"optical_cpo": "CPO", "custom_asic": "ASIC", "space_infrastructure": "Space", "physical_ai": "Physical AI"}
 PACK_INDEX_MAX_AGE = 12 * 3600
 
 logger = logging.getLogger(__name__)
@@ -379,7 +380,37 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             return self._follow_result(existing, already_following=True)
         record = self._create_record(arguments)
         path = store.save(record)
+        if kind == "pack":
+            self._attach_pack(store, record)
+            self._refresh_dashboard()
         return self._follow_result(record, path=str(path))
+
+    def _attach_pack(self, store: FollowStore, record: dict) -> None:
+        """Keep the Pack's thesis on the follow, and follow the readings it watches as its evidence.
+
+        Best effort: if the Pack can't be read now, the follow still works and shows its id."""
+        try:
+            summary = formatters.pack_summary(self._call("get_research_pack", {"pack_id": record.get("target_id")}))
+        except Exception as exc:  # noqa: BLE001 - the follow itself is saved; the summary is extra
+            logger.info("EquityLayer Pack not read after following: %s", getattr(exc, "code", type(exc).__name__))
+            return
+        if not summary:
+            return
+        record["pack"] = summary
+        variables = summary.get("variables") or []
+        if variables and not record.get("readings_id"):
+            theme = summary.get("theme_id") if summary.get("theme_id") in dashboard_page.THEME_LABELS else None
+            title = f"{PACK_SHORT.get(theme, 'Research')} Pack: the readings it watches"
+            watch_id = self._unique_item_id(title)
+            try:
+                saved = self._watch_save({"_new_id": watch_id, "title": title, "variables": variables,
+                                          "theme": theme})
+                if saved.get("ok"):
+                    self._watch_store().link_follow(watch_id, record.get("follow_id"))
+                    record["readings_id"] = watch_id
+            except Exception as exc:  # noqa: BLE001 - the follow works without its readings
+                logger.info("EquityLayer Pack readings not saved: %s", type(exc).__name__)
+        store.save(record)
 
     def _create_record(self, arguments: dict) -> dict:
         data = self._call("create_research_follow", arguments)
@@ -469,6 +500,8 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
 
     def _check_record(self, store: FollowStore, record: dict) -> dict:
         result = self._check_card(record["follow_card"])
+        if isinstance(record.get("pack"), dict):
+            result["title"] = record["pack"].get("title")
         if result["status"] == "error":
             return result
         apply_caller_action(record, result.get("_action"))
@@ -526,9 +559,26 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             # Pack cards name create_research_follow as the way to move to the new version.
             key = "thesis_id" if record.get("target_kind") == "view" else "pack_id"
             new_record = self._create_record({key: record.get("target_id")})
+        for key in ("pack", "readings_id"):
+            if record.get(key) and not new_record.get(key):
+                new_record[key] = record[key]
         store.save(new_record)
         if new_record.get("follow_id") != follow_id:
             store.delete(follow_id)
+            if new_record.get("readings_id"):
+                try:
+                    self._watch_store().link_follow(new_record["readings_id"], new_record.get("follow_id"))
+                except KeyError:
+                    new_record["readings_id"] = None
+                    store.save(new_record)
+        if new_record.get("target_kind") == "pack":
+            try:  # the new version may change the hypotheses
+                summary = formatters.pack_summary(self._call("get_research_pack", {"pack_id": new_record.get("target_id")}))
+                if summary:
+                    new_record["pack"] = summary
+                    store.save(new_record)
+            except Exception:  # noqa: BLE001 - the accepted card is saved either way
+                logger.info("EquityLayer Pack not re-read after accepting an update")
         return {
             **self._follow_result(new_record),
             "accepted": True,

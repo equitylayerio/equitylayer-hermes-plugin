@@ -93,6 +93,48 @@ def _clip(text: Any, limit: int = 320) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def pack_summary(pack: Any) -> dict | None:
+    """What a followed Pack holds, kept on the follow: its view, hypotheses, what would prove each wrong, and
+    the readings it watches. Text is clipped; ids that are not variable ids are dropped."""
+    from .watch_store import VARIABLE_RE
+
+    if not isinstance(pack, dict):
+        return None
+    cite = pack.get("cite_as") if isinstance(pack.get("cite_as"), dict) else {}
+    hyps, variables = [], []
+    for h in pack.get("hypotheses") or []:
+        if not isinstance(h, dict):
+            continue
+        a = h.get("assertion") if isinstance(h.get("assertion"), dict) else {}
+        test = h.get("test") if isinstance(h.get("test"), dict) else {}
+        watched = [w["variable"] for w in h.get("watches") or []
+                   if isinstance(w, dict) and isinstance(w.get("variable"), str) and VARIABLE_RE.match(w["variable"])]
+        variables += [v for v in watched if v not in variables]
+        statement = a.get("statement") or h.get("statement") or h.get("title")
+        if statement:
+            hyps.append({"statement": _clip(statement, 400), "confidence": h.get("confidence"), "state": h.get("state"),
+                         "falsifier": _clip(test.get("falsifier")) if test.get("falsifier") else None,
+                         "due": test.get("due"), "variables": watched})
+    url = cite.get("url") if str(cite.get("url") or "").startswith("https://") else None
+    return {"pack_id": pack.get("pack_id"), "title": _clip(cite.get("title") or pack.get("title") or pack.get("pack_id"), 200),
+            "view": _clip(pack.get("view"), 400) if pack.get("view") else None, "theme_id": pack.get("theme_id"),
+            "revision": pack.get("revision") or pack.get("pack_version"), "as_of": pack.get("as_of"), "url": url,
+            "hypotheses": hyps[:6], "variables": variables[:8]}
+
+
+def format_pack_thesis(summary: dict) -> str:
+    """The followed Pack's thesis, in plain lines: what it holds and what would prove each part wrong."""
+    lines = []
+    for n, h in enumerate(summary.get("hypotheses") or [], 1):
+        line = f"{n}. {h.get('statement')} (confidence {h.get('confidence') or '—'})"
+        if h.get("falsifier"):
+            line += f"\n   - Would be wrong if: {h['falsifier']}" + (f" (by {h['due']})" if h.get("due") else "")
+        lines.append(line)
+    return _join(f"## EquityLayer thesis: {summary.get('title')}",
+                 f"**View:** {summary['view']}" if summary.get("view") else "",
+                 "\n".join(lines))
+
+
 def _format_pack_v1(pack: dict) -> str:
     """Research Pack format v1: a view, hypotheses with their tests and watches, evidence claims, sources."""
     cite = pack.get("cite_as") if isinstance(pack.get("cite_as"), dict) else {}
@@ -295,6 +337,15 @@ def format_scorecard(data: dict) -> str:
 
 def format_follow_created(record: dict, schedule_hint: str, already_following: bool = False) -> str:
     verb = "Already following" if already_following else "Now following"
+    summary = record.get("pack") if isinstance(record.get("pack"), dict) else None
+    if summary:
+        readings = record.get("readings_id")
+        return _join(
+            f"**{verb} EquityLayer's Research Pack:** {summary.get('title')}",
+            f"Its hypotheses{' and the readings it watches' if readings else ''} are saved on this machine as one "
+            f"item, `{record.get('follow_id')}`. Next check: {record.get('next_check_at') or 'unknown'}.",
+            schedule_hint,
+        )
     return _join(
         f"**{verb}** `{record.get('target_id')}` ({record.get('target_kind')}).",
         f"Follow id: `{record.get('follow_id')}` · next check: {record.get('next_check_at') or 'unknown'}"
@@ -324,8 +375,13 @@ def format_check(result: dict) -> str:
     if result.get("status") == "error":
         return f"**`{follow_id}`:** check failed: {result.get('error')}. {result.get('message') or ''}".strip()
     review = result.get("needs_review")
+    if result.get("title") and result.get("status") == "current":
+        # The server's wording ("Keep this Follow Card") is for agents; say what it means.
+        return _join(f"**EquityLayer Research Pack · {result['title']}:** current. None of the readings it "
+                     "watches has moved since the last check.",
+                     f"Next check: {result['next_check_at']}" if result.get("next_check_at") else "")
     lines = [
-        f"**`{follow_id}`** (`{result.get('target_id')}`): {result.get('status')}",
+        f"**`{follow_id}`** ({result.get('title') or result.get('target_id')}): {result.get('status')}",
         result.get("message") or "",
         f"Next check: {result['next_check_at']}" if result.get("next_check_at") and not review else "",
         _changes_table(result.get("variable_changes")),
