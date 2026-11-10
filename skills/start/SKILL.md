@@ -1,6 +1,6 @@
 ---
 name: start
-description: Start researching a sector with EquityLayer in four decisions - sector, how to follow it (curated readings or your own view), one card to approve, and how often to check. Shows live readings before asking for any work, saves locally, sets up the daily check in this chat, keeps a local dashboard and remembers the answers.
+description: Start researching a sector with EquityLayer in four decisions - sector, how to follow it (EquityLayer's Research Pack when one is published, curated readings, or your own view), one card to approve, and how often to check. Shows live readings before asking for any work, saves locally, sets up the daily check in this chat, keeps a local dashboard and remembers the answers.
 ---
 
 # Start researching with EquityLayer
@@ -10,7 +10,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 
 ## How to guide
 
-- **Most people answer "yes" to the recommended option. Make that path end well:** saying yes at every step ends with curated readings saved, checked once, scheduled daily and shown on the dashboard.
+- **Most people answer "yes" to the recommended option. Make that path end well:** saying yes at every step ends with EquityLayer's Research Pack for the sector (or, without one, curated readings) saved, checked once, scheduled daily and shown on the dashboard.
 - **One question per message.** Offer at most four numbered options, with one marked "(recommended)" and a one-line reason. Always accept the person's own words instead.
 - **Say what each question decides** in one or two plain sentences. Explain each term once, the first time it appears: CPO, ASIC, segment revenue, threshold, wrong_if, withheld.
 - **Show the dashboard with its `::preview{...}` line,** never as a bare file path, and don't paste source URLs into the chat: the dashboard keeps them.
@@ -19,7 +19,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
   - before decision 1: EquityLayer makes your agent better at equity research: it checks company filings and exchange open data instead of guessing;
   - with the live readings: every reading carries its source and what it cannot show, gaps are named instead of filled, and everything you track stays on this machine;
   - in the close, about EquityLayer's own Research Pack for their sector (a thesis its research team verifies, with what would prove it wrong), going by the registry you listed: if one is published and they don't follow it, say so and that they can follow it from the dashboard; if one is in review, say it is not published yet; if there is none, say none is published for their sector and that the industry map on equitylayer.io shows which segments EquityLayer tracks and where a Pack stands (the dashboard has the link).
-- **Never say what to buy, sell, size or time.** Never write a view for the person or present one as EquityLayer's.
+- **Never say what to buy, sell, size or time.** Never write a view for the person, and never present a view as EquityLayer's unless it is a published Research Pack.
 
 ## Before the first question
 
@@ -55,15 +55,24 @@ Save the sector to the profile either way, so a later visit can check again.
 
 ## Decision 2. How do you want to follow it?
 
-**If EquityLayer has published a Research Pack for the sector,** it comes first:
+Offer exactly one of these two lists, with one option marked recommended.
 
-1. **Follow EquityLayer's Research Pack (recommended):** its title, in one line. EquityLayer's own thesis for the sector, verified by its research team, with what would prove each part wrong and the readings it watches.
+**When EquityLayer has published a Research Pack for the sector:**
+1. Follow EquityLayer's Research Pack (recommended)
+2. Follow the curated readings
+3. I have a view
+4. Help me form a view
 
-Then the options below, numbered 2 to 4. Without a published Pack, they are 1 to 3:
+**When it has not:**
+1. Follow the curated readings (recommended)
+2. I have a view
+3. Help me form a view
 
-1. **Follow the curated readings** (recommended when there is no Pack). No view needed. I tell you what moved at each check, and you can add a view later.
-2. **I have a view.** They write it in one sentence in their own words.
-3. **Help me form a view.** Ask up to three short questions, one per message:
+What each option means:
+- **Follow EquityLayer's Research Pack:** its title, in one line. EquityLayer's own thesis for the sector: its sources were checked by EquityLayer's research team, and its hypotheses are still being tested, each with what would prove it wrong and the readings it watches.
+- **Follow the curated readings.** No view needed. I tell you what moved at each check, and you can add a view later.
+- **I have a view.** They write it in one sentence in their own words.
+- **Help me form a view.** Ask up to three short questions, one per message:
    - What do you expect to happen?
    - By when?
    - Who would show it first in their numbers?
@@ -130,7 +139,7 @@ Call el_check with no arguments to check everything the user tracks with EquityL
 
 ## Remember and close
 
-Call `el_profile` with what they chose: `sectors`, `path` (curated, own_view or formed_view), `check`, `check_time`, `timezone`, and `language` only when they wrote in a language other than English.
+Call `el_profile` with what they chose: `sectors`, `path` (pack, curated, own_view or formed_view), `check`, `check_time`, `timezone`, and `language` only when they wrote in a language other than English.
 
 Then call `el_dashboard_render` again, so the dashboard shows the schedule, and close in three lines:
 - What is saved (this machine only), and where the dashboard lives: the path the tool returned; reopen it with `/el dashboard` or from Artifacts, no need to scroll back to the preview.

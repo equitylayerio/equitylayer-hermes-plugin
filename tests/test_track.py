@@ -129,6 +129,9 @@ def test_pending_pack_update_keeps_reporting(make_service):
     routes = {**ROUTES, "check_research_follow": "check_follow_review_required"}
     service, _, store = make_service(routes)
     followed = call(service.el_track, {"pack_id": "ai-compute-pcb-ccl-value-capture"})
+    record = store.get(followed["item_id"])
+    record["follow_card"]["version"] = "2026-08"  # the card the review fixture moves on from
+    store.save(record)
     first = call(service.el_check)
     assert first["report_total"] >= 1
     again = call(service.el_check)
@@ -223,3 +226,45 @@ def test_preview_puts_a_published_pack_first(make_service):
     actions = page[page.index('<div class="actions">'):]
     assert actions.index("Follow EquityLayer's Research Pack") < actions.index("Follow these readings")
     assert 'class="ghost" data-hermes-send="Yes, follow these curated readings."' in actions
+
+
+
+def test_new_data_for_a_pack_is_read_with_its_readings_and_a_new_revision_is_not(make_service, tmp_path):
+    service, _, store = make_service({**PACK_ROUTES, "check_research_follow": "check_follow_cpo_new_data"})
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    check = call(service.el_check, {"item_id": fid})
+    assert "a reading it watches has new data" in check["markdown"] and "Hypotheses are unchanged" not in check["markdown"]
+    assert "A new version is published" not in check["markdown"]
+    assert store.get(fid)["pending_review"]["revision_changed"] is False
+    page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
+    assert "New data in its readings" in page and "tell Hermes you've read it" in page
+    seen = call(service.el_seen, {"item_id": fid})
+    assert seen["ok"] and "baseline moved to the new data" in seen["markdown"]
+    new_id = [f for f in (tmp_path / "follows").iterdir()][0].stem
+    assert store.get(new_id)["pending_review"] is None and store.get(new_id)["readings_id"]
+
+    # A new revision still needs the person's explicit yes.
+    record = store.get(new_id)
+    record["pack"]["revision"] = "R1"
+    record["follow_card"]["version"] = "R1"
+    store.save(record)
+    call(service.el_check, {"item_id": new_id})
+    assert store.get(new_id)["pending_review"]["revision_changed"] is True
+    seen = call(service.el_seen, {"item_id": new_id})
+    assert "new revision to review" in seen["markdown"] and store.get(new_id)["pending_review"]
+
+
+def test_refollowing_completes_a_pack_followed_before_it_could_be_read(make_service):
+    service, _, store = make_service({**PACK_ROUTES, "get_research_pack": 503})
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    assert "pack" not in store.get(fid)
+    service, _, _ = make_service(PACK_ROUTES)  # same local files, the Pack readable now
+    again = call(service.el_track, {"pack_id": PACK_ID})
+    assert again["already_following"] and store.get(fid)["readings_id"] and store.get(fid)["pack"]["hypotheses"]
+
+
+def test_a_follow_with_nothing_waiting_is_not_an_error(make_service):
+    service, _, store = make_service({**ROUTES, "get_research_pack": 503})
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    seen = call(service.el_seen, {"item_id": fid})
+    assert seen["ok"] and "no update waiting" in seen["markdown"]

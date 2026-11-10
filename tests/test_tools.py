@@ -119,7 +119,8 @@ def test_follow_create_twice_keeps_the_original_baseline(make_service):
     first = call(service.el_follow_create, {"pack_id": PACK})
     second = call(service.el_follow_create, {"pack_id": PACK})
     assert second["already_following"] is True and second["follow_id"] == first["follow_id"]
-    assert transport.names() == ["create_research_follow", "get_research_pack"]  # the Pack is read once
+    # One card only; the Pack is read again only to complete a follow whose readings could not be saved.
+    assert transport.names().count("create_research_follow") == 1 and transport.names()[1] == "get_research_pack"
     assert len(store.all()[0]) == 1
 
 
@@ -152,7 +153,7 @@ def test_review_required_does_not_overwrite_card_until_accepted(make_service):
 
     result = call(service.el_follow_check, {"follow_id": follow_id})
     assert result["needs_review"] == 1
-    assert "/el seen follow_" in result["markdown"]
+    assert "tell Hermes to accept the update" in result["markdown"] and "/el seen" not in result["markdown"]
     assert "Elite Material (2383) monthly revenue" in result["markdown"]
     stored = store.get(follow_id)
     assert stored["follow_card"] == card_before

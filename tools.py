@@ -377,6 +377,11 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         # Keep the original baseline: a fresh card would silently hide changes since it was created.
         existing = store.find_target(kind, target)
         if existing:
+            summary = existing.get("pack") if isinstance(existing.get("pack"), dict) else None
+            if kind == "pack" and (not summary or (summary.get("variables") and not existing.get("readings_id"))):
+                # A follow made before its Pack could be read, or by an older version: complete it now.
+                self._attach_pack(store, existing)
+                self._refresh_dashboard()
             return self._follow_result(existing, already_following=True)
         record = self._create_record(arguments)
         path = store.save(record)
@@ -502,6 +507,11 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         result = self._check_card(record["follow_card"])
         if isinstance(record.get("pack"), dict):
             result["title"] = record["pack"].get("title")
+            result["linked"] = bool(record.get("readings_id"))
+        current = (record.get("pack") or {}).get("revision") or (record.get("follow_card") or {}).get("version")
+        upcoming = result.get("new_version") or (result.get("next_card") or {}).get("version")
+        # New data for a watched reading keeps the revision; a new revision is EquityLayer changing the Pack.
+        result["revision_changed"] = bool(upcoming) and str(upcoming) != str(current)
         if result["status"] == "error":
             return result
         apply_caller_action(record, result.get("_action"))
@@ -509,7 +519,8 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             # The stored card stays as it is until the user accepts.
             record["pending_review"] = {
                 k: result.get(k)
-                for k in ("status", "message", "new_version", "read", "next_card", "variable_changes", "new_events")
+                for k in ("status", "message", "new_version", "read", "next_card", "variable_changes", "new_events",
+                          "revision_changed")
             }
         else:
             if isinstance(result.get("_card"), dict):
@@ -568,7 +579,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             if new_record.get("readings_id"):
                 try:
                     self._watch_store().link_follow(new_record["readings_id"], new_record.get("follow_id"))
-                except KeyError:
+                except Exception:  # noqa: BLE001 - a missing or unreadable watchlist leaves the Pack on its own
                     new_record["readings_id"] = None
                     store.save(new_record)
         if new_record.get("target_kind") == "pack":
@@ -577,6 +588,10 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
                 if summary:
                     new_record["pack"] = summary
                     store.save(new_record)
+                    watch = self._watch_store().get(new_record["readings_id"]) if new_record.get("readings_id") else None
+                    if watch and summary.get("variables") and summary["variables"] != watch.get("variables"):
+                        self._watch_save({"watch_id": watch["id"], "title": watch.get("title"),
+                                          "variables": summary["variables"], "theme": watch.get("theme")})
             except Exception:  # noqa: BLE001 - the accepted card is saved either way
                 logger.info("EquityLayer Pack not re-read after accepting an update")
         return {

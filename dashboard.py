@@ -239,11 +239,14 @@ def _pack_hero(record: dict) -> str:
                  + (f" (by {_e(h.get('due'))})" if h.get("due") else "") + "</span>") if h.get("falsifier") else ""
         items += (f'<li>{_e(h.get("statement"))} <span class="tag">confidence {_e(h.get("confidence") or "—")}</span>'
                   f'{wrong}</li>')
-    if record.get("pending_review"):
-        status = '<p><span class="verdict v-warn">Update to review</span></p>'
+    pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
+    below = " · the readings it watches are below as evidence" if record.get("readings_id") else ""
+    if pending:
+        label_text = "New revision to review" if pending.get("revision_changed") else "New data in its readings"
+        status = f'<p><span class="verdict v-warn">{label_text}</span></p>'
     else:
         status = (f'<p class="muted small">Next check {_e(record.get("next_check_at") or record.get("fresh_until") or "—")}'
-                  " · the readings it watches are below as evidence.</p>")
+                  f"{below}.</p>")
     url = _https(summary.get("url"))
     link = f'<p><a class="go" href="{_e(url)}">Read the full Pack on equitylayer.io →</a></p>' if url else ""
     return (f'<section class="card hero pack"><p class="eyebrow">EquityLayer thesis' + (f" · {_e(label)}" if label else "")
@@ -257,7 +260,7 @@ def _change_pct(row: dict) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def _readings_hero(record: dict) -> str:
+def _readings_hero(record: dict, linked: bool = False) -> str:
     last = record.get("last_check") if isinstance(record.get("last_check"), dict) else None
     rows = (last or {}).get("rows") or []
     if not rows:
@@ -274,7 +277,7 @@ def _readings_hero(record: dict) -> str:
             + (f", {withheld} withheld" if withheld else "") + '.</p>'
             + (f'<p class="muted small">Largest moves</p><ul class="movers">{items}</ul>' if items else "")
             + ('<p class="muted small">These are the readings the Pack above watches. Its hypotheses say what each '
-               'would mean, and when.</p>' if record.get("follow_id") else
+               'would mean, and when.</p>' if linked else
                '<p class="muted small">This describes the readings, not a view. Add your own thesis to have Hermes '
                'check it.</p>')
             + '</section>')
@@ -447,10 +450,12 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                              f'{_e(last.get("needs_human"))} item(s) only you can judge' if last.get("needs_human") else "",
                              "a wrong_if fired" if last.get("wrong_if_fired") else "") if x) + "</li>")
     for record in followed.values():
-        if record.get("pending_review"):
+        pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
+        if pending:
             title = (record.get("pack") or {}).get("title") or record.get("target_id")
-            needs.append(f'<li>EquityLayer Research Pack <b>{_e(title)}</b>: an update to review. Ask Hermes to '
-                         'check it; it moves to the new version only when you say so.</li>')
+            what = ("a new revision to review; it moves to it only when you say so" if pending.get("revision_changed")
+                    else "new data in a reading it watches; tell Hermes you've read it")
+            needs.append(f'<li>EquityLayer Research Pack <b>{_e(title)}</b>: {what}.</li>')
     for record in watchlists:
         if isinstance(record.get("pending"), dict):
             new = ((record.get("last_check") or {}).get("new_count") or 0)
@@ -511,7 +516,9 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     for record in theses:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
     pack_heroes = {pid: _pack_hero(r) for pid, r in followed.items() if isinstance(r.get("pack"), dict)}
-    own = [_thesis_hero(r) for r in theses[:3]] or [h for h in (_readings_hero(r) for r in watchlists[:2]) if h]
+    hero_follows = {r.get("follow_id") for r in followed.values() if isinstance(r.get("pack"), dict)}
+    own = [_thesis_hero(r) for r in theses[:3]] or [
+        h for h in (_readings_hero(r, r.get("follow_id") in hero_follows) for r in watchlists[:2]) if h]
     heroes = list(pack_heroes.values())[:2] + own
     if heroes:
         body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))

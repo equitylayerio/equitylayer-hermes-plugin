@@ -90,7 +90,7 @@ A local dashboard (`/el dashboard`, or Artifacts in Hermes Desktop) shows what y
 | `/el seen <id>` | Mark an item's last check as read. |
 | `/el list [id]` | Everything you track with its level, or one item in full. |
 
-Everything else works in plain words, for example "add my own thesis to my CPO readings" or "is there a Research Pack for CPO?". `/el remove <id>` deletes an item from this machine; no tool deletes anything. Accepting a followed Pack's update, which happens only when you say so, replaces its card with the new version.
+Everything else works in plain words, for example "add my own thesis to my CPO readings" or "is there a Research Pack for CPO?". `/el remove <id>` deletes an item from this machine; no tool deletes anything. Following a Pack also follows the readings it watches, as one item. When one of them has new data, saying you've read it moves the Pack's baseline too; a new revision of the Pack replaces its card only when you accept it.
 
 ## Tools the model can call
 

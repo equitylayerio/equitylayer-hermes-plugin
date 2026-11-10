@@ -231,12 +231,12 @@ class TrackTools:
             if "watch" in parts:
                 calls.append(("readings", lambda: self._watch_check({"watch_id": watch_id}, seen=seen)))
         else:
+            if self._store_factory().all()[0]:  # same order as one item: the Pack, then its evidence
+                calls.append(("followed Research Packs", lambda: self._follow_check({})))
             if self._harness_store_factory().all()[0]:
                 calls.append(("theses", lambda: self._harness_check({}, seen=seen)))
             if self._watch_store_factory().all()[0]:
                 calls.append(("readings", lambda: self._watch_check({}, seen=seen)))
-            if self._store_factory().all()[0]:
-                calls.append(("followed Research Packs", lambda: self._follow_check({})))
         report_total, awaiting, blocks = 0, [], []
         for kind, call in calls:
             count, waiting, markdown = self._run_kind(kind, call)
@@ -275,22 +275,33 @@ class TrackTools:
             result = self._accept_next(follow_id)
             new_id = result.get("follow_id") or follow_id
             return {**result, "item_id": new_id, "previous_item_id": follow_id, "level": PACK}
-        if "follow" in parts and "watch" not in parts and "harness" not in parts:
-            return {"ok": False, "error": "accept_needs_confirmation", "item_id": item_id,
-                    "message": "A followed Pack has nothing to mark as read. If it has an update to review, ask the "
-                               "person whether to accept it; only then call el_seen with accept_update true."}
         results = []
         if "harness" in parts:
             results.append(self._harness_seen({"harness_id": self._part_id(parts, "harness", item_id)}))
         if "watch" in parts:
             results.append(self._watch_seen({"watch_id": self._part_id(parts, "watch", item_id)}))
+        pack_note, pack_ok = "", False
+        pending = (parts.get("follow") or {}).get("pending_review")
+        if "follow" in parts and isinstance(pending, dict):
+            if pending.get("revision_changed"):
+                pack_note = ("This Pack also has a new revision to review. It moves to it only when the person says "
+                             "to accept it (el_seen with accept_update).")
+            else:
+                # New data for a reading it watches: reading it is the same as reading the readings.
+                accepted = self._accept_next(self._part_id(parts, "follow", item_id))
+                pack_ok = bool(accepted.get("ok"))
+                pack_note = "The Pack's baseline moved to the new data." if pack_ok else ""
+        elif "follow" in parts and not results:
+            return {"ok": True, "item_id": item_id, "level": PACK,
+                    "markdown": "Nothing to mark: this Pack has no update waiting."}
         done = [r for r in results if r.get("ok")]
-        if not done:
-            first = results[0]
+        if not done and not pack_ok:
+            first = results[0] if results else {"ok": False, "error": "accept_needs_confirmation",
+                                                "message": pack_note}
             return {**first, "item_id": item_id, "level": _level(parts)}
-        markdown = "\n\n".join(str(r.get("markdown") or "") for r in done if r.get("markdown"))
+        markdown = "\n\n".join([str(r.get("markdown") or "") for r in done if r.get("markdown")] + [pack_note])
         return {"ok": True, "item_id": item_id, "level": _level(parts),
-                "markdown": markdown or f"Marked `{item_id}` as read."}
+                "markdown": markdown.strip() or f"Marked `{item_id}` as read."}
 
     # -- list ------------------------------------------------------------------------------------------
 

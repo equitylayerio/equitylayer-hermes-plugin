@@ -115,7 +115,7 @@ def pack_summary(pack: Any) -> dict | None:
             hyps.append({"statement": _clip(statement, 400), "confidence": h.get("confidence"), "state": h.get("state"),
                          "falsifier": _clip(test.get("falsifier")) if test.get("falsifier") else None,
                          "due": test.get("due"), "variables": watched})
-    url = cite.get("url") if str(cite.get("url") or "").startswith("https://") else None
+    url = cite.get("url") if str(cite.get("url") or "").startswith("https://equitylayer.io/") else None
     return {"pack_id": pack.get("pack_id"), "title": _clip(cite.get("title") or pack.get("title") or pack.get("pack_id"), 200),
             "view": _clip(pack.get("view"), 400) if pack.get("view") else None, "theme_id": pack.get("theme_id"),
             "revision": pack.get("revision") or pack.get("pack_version"), "as_of": pack.get("as_of"), "url": url,
@@ -380,6 +380,14 @@ def format_check(result: dict) -> str:
         return _join(f"**EquityLayer Research Pack · {result['title']}:** current. None of the readings it "
                      "watches has moved since the last check.",
                      f"Next check: {result['next_check_at']}" if result.get("next_check_at") else "")
+    if result.get("title") and result.get("linked") and review:
+        if result.get("revision_changed"):
+            return _join(f"**EquityLayer Research Pack · {result['title']}:** EquityLayer published a new revision "
+                         f"({result.get('new_version')}). Read it, then say whether to move to it. Until then this "
+                         "follow keeps the current one.", _events(result.get("new_events")))
+        return _join(f"**EquityLayer Research Pack · {result['title']}:** a reading it watches has new data (shown "
+                     "with its readings). The Pack's hypotheses are unchanged. Saying you've read it also moves the "
+                     "Pack's baseline to this data.")
     lines = [
         f"**`{follow_id}`** ({result.get('title') or result.get('target_id')}): {result.get('status')}",
         result.get("message") or "",
@@ -389,8 +397,8 @@ def format_check(result: dict) -> str:
     ]
     if review:
         lines.append(
-            f"Review the change, then run `/el seen {follow_id}` to move this follow to the new "
-            "baseline. The stored card stays unchanged until then."
+            "Review the change. To move this follow to the new baseline, tell Hermes to accept the update; "
+            "the stored card stays unchanged until then."
         )
     return _join(*lines)
 
@@ -423,7 +431,7 @@ def format_check_run(results: list[dict], awaiting: list[dict], due_mode: bool) 
     blocks = [format_check(r) for r in results]
     if awaiting:
         blocks.append(
-            "Still awaiting your review: " + ", ".join(f"`{r.get('follow_id')}`" for r in awaiting)
+            "Still waiting for you: " + ", ".join(f"`{r.get('follow_id')}`" for r in awaiting)
         )
     if not blocks:
         return "No local follows are due." if due_mode else "Nothing to check."

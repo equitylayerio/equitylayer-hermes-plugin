@@ -41,7 +41,7 @@ CHECKS = ("daily", "weekly", "manual")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 TIMEZONE_RE = re.compile(r"^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+\-]+){1,2})$")
 LANGUAGE_RE = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$")
-PATHS = ("curated", "own_view", "formed_view")
+PATHS = ("pack", "curated", "own_view", "formed_view")
 FIELDS = ("sectors", "path", "has_view", "check", "check_time", "timezone", "language")
 
 
@@ -142,7 +142,9 @@ def describe(profile: dict | None) -> str:
     parts = []
     if profile.get("sectors"):
         parts.append("researches " + ", ".join(SECTOR_LABELS[s] for s in profile["sectors"]))
-    if profile.get("path") == "curated":
+    if profile.get("path") == "pack":
+        parts.append("follows EquityLayer's Research Pack")
+    elif profile.get("path") == "curated":
         parts.append("follows curated readings")
     elif profile.get("path") in ("own_view", "formed_view"):
         parts.append("tracks their own thesis")
