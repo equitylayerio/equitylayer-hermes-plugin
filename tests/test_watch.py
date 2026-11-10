@@ -138,7 +138,7 @@ def test_profile_counts_a_watchlist_as_returning(make_service):
     _save(service)
     got = json.loads(service.el_profile_get({}))
     assert got["returning"] is True and got["saved_watchlists"][0]["id"] == "cpo-curated-readings"
-    assert "Following: 1 watchlist(s)" in got["markdown"]
+    assert "Tracked: 1 readings" in got["markdown"]
 
 
 def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_path):

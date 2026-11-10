@@ -115,7 +115,7 @@ def test_empty_registry_says_no_pack_is_published():
                                       industries=data["current_product_industries"])
     assert "No Research Pack is published right now" in text
     assert "CPO, Physical AI, Space infrastructure" in text
-    assert "/el plan" in text
+    assert "/equitylayer:start" in text
 
 
 def test_statement_reading_is_quoted_as_data_for_the_person():

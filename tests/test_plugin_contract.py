@@ -129,3 +129,29 @@ def test_skills_name_only_registered_tools():
     for path in (ROOT / "skills").glob("*/SKILL.md"):
         named = set(re.findall(r"\bel_[a-z_]+", path.read_text(encoding="utf-8")))
         assert named <= registered, (path.name, named - registered)
+
+
+def test_code_strings_name_only_registered_tools():
+    """Text the model or person reads must not point at a tool that is no longer registered."""
+    import ast
+    import re
+
+    registered = set(_manifest()["provides_tools"])
+    found = {}
+    for path in ROOT.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                for name in re.findall(r"\bel_[a-z_]+", node.value):
+                    if name not in registered:
+                        found.setdefault(path.name, set()).add(name)
+    assert not found, found
+
+
+def test_help_lists_five_commands_and_old_ones_still_route(make_service):
+    from equitylayer_plugin.commands import HELP, make_slash_handler
+
+    assert all(cmd in HELP for cmd in ("/el start", "/el dashboard", "/el check", "/el seen", "/el list"))
+    service, _, _ = make_service()
+    handle = make_slash_handler(service)
+    assert "You don't track anything yet" in handle("theses") and "You don't track anything yet" in handle("follows")
+    assert "Usage: `/el remove <id>`" in handle("remove")

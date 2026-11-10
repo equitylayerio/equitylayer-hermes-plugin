@@ -79,6 +79,27 @@ def _plan_args(words: list[str]) -> dict:
     return args
 
 
+def _remove_item(service: EquityLayerTools, args: dict) -> dict:
+    """Slash-only: delete every part of one tracked item from this machine. No tool can do this."""
+    item_id, bad = service._item_id(args)
+    if bad:
+        return bad
+    if not item_id:
+        return {"ok": False, "error": "missing_argument", "argument": "id",
+                "message": "Usage: `/el remove <id>`. Run `/el list` for ids."}
+    parts = service._parts(item_id)
+    if not parts:
+        return service._unknown_item(item_id)
+    if "harness" in parts:
+        service._harness_remove({"harness_id": item_id})
+    if "watch" in parts:
+        service._watch_remove({"watch_id": item_id})
+    if "follow" in parts:
+        service._follow_remove({"follow_id": item_id})
+    service._refresh_dashboard()
+    return {"ok": True, "markdown": f"Removed `{item_id}` from this machine."}
+
+
 def _watch_check_as_person(service: EquityLayerTools, args: dict) -> dict:
     return service._watch_check(args, seen=True)
 
@@ -140,20 +161,16 @@ def make_slash_handler(service: EquityLayerTools):
             return _render(run(_check_as_person, {"item_id": first}))
         if command == "seen":
             return _render(run(EquityLayerTools._seen, {"item_id": first}))
-        if command in ("list", "items", "theses", "watches"):
+        if command in ("list", "items", "theses", "harnesses", "watches", "watchlists", "follows", "show"):
             return _render(run(EquityLayerTools._list, {"item_id": first}))
         if command == "profile":
             return _render(run(EquityLayerTools._profile_get, {}))
         if command == "dashboard":
             return _render(run(EquityLayerTools._dashboard, {}))
-        if command in ("watches", "watchlists"):
-            return _render(run(EquityLayerTools._watch_list, {"watch_id": first}))
         if command == "watch-check":
             return _render(run(_watch_check_as_person, {"watch_id": first}))
         if command == "watch-seen":
             return _render(run(EquityLayerTools._watch_seen, {"watch_id": first}))
-        if command == "unwatch":
-            return _render(run(EquityLayerTools._watch_remove, {"watch_id": first}))
         if command == "plan":
             args = _plan_args(rest)
             if not args.get("thesis_text"):
@@ -161,18 +178,8 @@ def make_slash_handler(service: EquityLayerTools):
             return _render(run(EquityLayerTools._plan, args))
         if command in ("var", "variable"):
             return _render(run(EquityLayerTools._variable, {"variable": first}))
-        if command in ("theses", "harnesses", "list"):
-            return _render(run(EquityLayerTools._harness_list, {}))
-        if command == "show":
-            if not first:
-                return "Usage: `/el show <id>`. Run `/el theses` for ids."
-            return _render(run(EquityLayerTools._harness_list, {"harness_id": first}))
-        if command == "check":
-            return _render(run(_check_as_person, {"harness_id": first}))
-        if command == "seen":
-            return _render(run(EquityLayerTools._harness_seen, {"harness_id": first}))
-        if command in ("remove", "delete"):
-            return _render(run(EquityLayerTools._harness_remove, {"harness_id": first}))
+        if command in ("remove", "delete", "unwatch", "unfollow"):
+            return _render(run(_remove_item, {"item_id": first}))
         if command == "schedule":
             return _schedule_args(rest)
 
@@ -187,15 +194,11 @@ def make_slash_handler(service: EquityLayerTools):
             if not first:
                 return "Usage: `/el follow <id>`. Run `/el registry` for ids."
             return _render(run(_follow_by_id, {"id": first}))
-        if command == "follows":
-            return _render(run(EquityLayerTools._follow_list, {}))
         if command == "follow-check":
             accept = "--accept" in rest
             ids = [w for w in rest if w != "--accept"]
             return _render(run(EquityLayerTools._follow_check,
                                {"follow_id": ids[0] if ids else "", "accept_next": accept}))
-        if command == "unfollow":
-            return _render(run(EquityLayerTools._follow_remove, {"follow_id": first}))
         return HELP
 
     return handle

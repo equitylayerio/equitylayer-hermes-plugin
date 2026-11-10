@@ -47,11 +47,11 @@ Optional: `title`, `differs_from`, `do_not_track`, `exposure` (companies and ope
 ## 4. Save and check
 
 1. Show the user the four parts you drafted and get their OK. Then call `el_track` with the harness. EquityLayer validates it first; fix any `problems` it returns and save again.
-   Pass `harness_id` to update a saved harness. Moving an `expected_by` needs an `expected_history` entry with the old date and the reason.
+   To change a saved thesis, call `el_track` with its `item_id` and the full updated harness. Moving an `expected_by` needs an `expected_history` entry with the old date and the reason.
 2. `el_check` with the `item_id` `el_track` returned. Show the `markdown` as returned: statuses, wrong_if results, what changed, caveats, sources.
 3. `no_data` is not good news. It says what could not be compared.
 4. The new baseline is not kept until the user says they have read the result. Only then call `el_seen` with that `item_id`.
-5. For daily checks, create the job from this chat as step 10 of the `equitylayer:start` skill describes (fixed prompt, delivered here), or point the user to `/el schedule` or `/blueprint equitylayer:thesis-check`. Scheduled runs are silent when nothing moved.
+5. For daily checks, create the job from this chat as decision 4 of the `equitylayer:start` skill describes (fixed prompt, delivered here), or point the user to `/el schedule` or `/blueprint equitylayer:daily-check`. Scheduled runs are silent when nothing moved.
 
 A person new to EquityLayer, or one who has no thesis yet, is better served by the `equitylayer:start` skill: it asks one question at a time.
 

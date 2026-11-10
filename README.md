@@ -34,7 +34,7 @@ you: /equitylayer:start  →  sector  →  live readings and your dashboard (bef
 
 A plain `mcp.json` connector gives the model EquityLayer's tools. It cannot remember your harness, keep a baseline, run on a schedule, or hold back a baseline until a person has read the result. This plugin adds:
 
-- **One tracked object, three levels:** follow a sector's curated readings, add your own thesis to them (same item, same id), or follow EquityLayer's published thesis. Stored as atomic JSON under Hermes's `plugin-data/equitylayer/`.
+- **One tracked object, three levels:** follow a sector's curated readings, add your own thesis to them (same id; the readings stay as its evidence), or follow EquityLayer's published thesis. Stored as atomic JSON under Hermes's `plugin-data/equitylayer/`.
 - **Guided start** (`/equitylayer:start`): four decisions with a recommended option each, live readings first.
 - **One daily check** created from the chat (or `/blueprint equitylayer:daily-check`) that only contacts EquityLayer for items that are due, stays silent when nothing is new, and repeats an unread alert instead of marking it read.
 - **A local dashboard in the chat:** the thesis first with a plain status, then the readings as evidence by supply-chain step, with what each company does (from its own disclosures), official events and what is due next. Built by code from local files; contacts no one.
@@ -90,7 +90,7 @@ A local dashboard (`/el dashboard`, or Artifacts in Hermes Desktop) shows what y
 | `/el seen <id>` | Mark an item's last check as read. |
 | `/el list [id]` | Everything you track with its level, or one item in full. |
 
-Everything else works in plain words, for example "add my own thesis to my CPO readings" or "is there a Research Pack for CPO?". `/el remove <id>` deletes a thesis from this machine; no tool can delete anything.
+Everything else works in plain words, for example "add my own thesis to my CPO readings" or "is there a Research Pack for CPO?". `/el remove <id>` deletes an item from this machine; no tool deletes anything. Accepting a followed Pack's update, which happens only when you say so, replaces its card with the new version.
 
 ## Tools the model can call
 
@@ -101,9 +101,9 @@ Nine tools. A tracked item has one of three levels: **readings**, **your thesis*
 | `el_profile` | Read or save the person's profile; returns what they track and the sector options with live coverage. |
 | `el_plan` | Find catalog variables for a sector or a thesis, with caveats and gaps. |
 | `el_get_variable` | Read one variable's levels, and what its company does, before showing or setting a threshold. |
-| `el_track` | Save a tracked item at any level, or add a thesis to readings already followed (same id). |
+| `el_track` | Save a tracked item at any level, add a thesis to readings already followed (same id, readings kept), or update a thesis. |
 | `el_check` | Check everything due, or one item. Never marks anything as read. |
-| `el_seen` | Keep a check as the new baseline after the person says they read it. Refused in scheduled runs. |
+| `el_seen` | Keep a check as the new baseline after the person says they read it; for a followed Pack, accept an update only when they say so. Refused in scheduled runs. |
 | `el_list` | List tracked items, or open one. |
 | `el_dashboard_render` | Write the local dashboard and show it in the chat. |
 | `el_research_pack` | List, read or score EquityLayer's published Research Packs. |

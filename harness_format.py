@@ -105,7 +105,7 @@ def format_plan(data: dict, thesis_text: str = "") -> str:
         f"**Terms with no match:** {unmatched}" if unmatched else "",
         _section("How to choose", _bullets(selection.get("rules") or [])),
         "**Next:** pick variables from this list only, write the four parts (hypothesis, why, tracking, wrong_if) "
-        "with thresholds you choose, then save with `el_harness_save`. Thresholds are your judgment.",
+        "with thresholds you choose, then save it with `el_track`. Thresholds are your call.",
         BOUNDARY,
     )
 
@@ -296,7 +296,7 @@ def _counts(last: dict) -> str:
 def format_harness_list(rows: list[dict], unreadable: list[str]) -> str:
     if not rows and not unreadable:
         return (
-            "No thesis harness saved yet. Tell me your thesis, or run `/el plan <your thesis>` to see which "
+            "No thesis harness saved yet. Tell me your thesis, or type `/equitylayer:start` to see which "
             "variables could track it."
         )
     table = _table(
@@ -312,7 +312,7 @@ def format_harness_list(rows: list[dict], unreadable: list[str]) -> str:
         "## Your thesis harnesses (stored on this machine only)",
         table,
         bad,
-        "`/el check <id>` checks one now. `/el check` checks every harness that is due.",
+        "`/el check <id>` checks one now. `/el check` checks everything that is due.",
     )
 
 

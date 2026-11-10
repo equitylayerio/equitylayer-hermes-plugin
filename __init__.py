@@ -24,7 +24,7 @@ def register(ctx) -> None:
     ctx.register_command(
         "el",
         handler=commands.make_slash_handler(service),
-        description="EquityLayer: track your own thesis (plan, check, seen) and published research",
+        description="EquityLayer: start, dashboard, check, seen, list",
         args_hint="<start|dashboard|check|seen|list|help>",
     )
     ctx.register_cli_command(

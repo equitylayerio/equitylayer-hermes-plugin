@@ -24,10 +24,10 @@ PRICING_URL = "https://equitylayer.io/pricing"
 # Substrings of upstream error codes that mean authentication, entitlement or payment.
 GATED_MARKERS = ("authentication", "authorization", "unauthorized", "entitle", "payment", "x402", "grant", "activation")
 HINTS = {
-    "unknown_research_pack": "Run el_list_registry (/el registry) for valid ids.",
+    "unknown_research_pack": "Run el_research_pack with action list for valid ids.",
     "research_pack_unavailable": (
         "This pack is not available on this route. It may be retired or gated. Pick a public entry "
-        "from el_list_registry (/el registry)."
+        "from el_research_pack (action list)."
     ),
     "upstream_unavailable": "EquityLayer could not be reached. Local follows are unchanged. Try again later.",
     "invalid_mcp_url": "Set mcp_url to https://equitylayer.io/mcp in this plugin's settings.",
@@ -375,7 +375,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             "ok": False,
             "error": "unknown_follow",
             "follow_id": follow_id,
-            "hint": "Run el_follow_list (/el follows) for local follow ids.",
+            "hint": "Run el_list (/el list) for the ids you track.",
         }
 
     def _check_card(self, card: dict) -> dict:
@@ -527,16 +527,17 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         profile = self._profile_store_factory().get()
         harnesses, _ = self._harness_store_factory().all()
         watchlists, _ = self._watch_store_factory().all()
+        follows, _ = self._store_factory().all()
         about = describe(profile)
         lines = ["**Your EquityLayer research profile** (this machine only)", ""]
         lines.append(f"- {about[0].upper() + about[1:]}." if about else "- Not set up yet. Type `/equitylayer:start`.")
-        lines.append(f"- Following: {len(watchlists)} watchlist(s)" + (" (`/el watches`)" if watchlists else ""))
-        lines.append(f"- Saved theses: {len(harnesses)}" + (" (`/el theses`)" if harnesses else ""))
+        lines.append(f"- Tracked: {len(watchlists)} readings, {len(harnesses)} of your theses, "
+                     f"{len(follows)} followed Research Pack(s) (`/el list`)")
         return {
             "ok": True,
             "markdown": "\n".join(lines),
             "profile": profile,
-            "returning": bool(profile or harnesses or watchlists),
+            "returning": bool(profile or harnesses or watchlists or follows),
             "saved_harnesses": [{"id": r.get("id"), "title": r.get("title")} for r in harnesses][:15],
             "saved_watchlists": [{"id": r.get("id"), "title": r.get("title"), "variables": r.get("variables")}
                                  for r in watchlists][:10],

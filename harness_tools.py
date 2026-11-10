@@ -151,7 +151,7 @@ class HarnessTools:
         variable = _text(args, "variable")
         if not variable.startswith("v:"):
             return {"ok": False, "error": "missing_argument", "argument": "variable",
-                    "message": "Give a variable id from el_plan_thesis, for example v:3363.two.revenue.monthly."}
+                    "message": "Give a variable id from el_plan, for example v:3363.two.revenue.monthly."}
         data = self._call("get_variable", {"variable": variable})
         company = role_for(data.get("entity"))
         markdown = harness_format.format_variable(data)

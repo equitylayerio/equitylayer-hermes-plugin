@@ -157,6 +157,13 @@ class HarnessStore:
         self._write(self._path(harness_id), record)
         return record, created
 
+    def set_theme(self, harness_id: str, theme: str | None) -> None:
+        """Keep the sector on the record (not in the harness sent to EquityLayer)."""
+        record = self.get(harness_id)
+        if record is not None and theme and record.get("theme") != theme:
+            record["theme"] = theme
+            self._write(self._path(harness_id), record)
+
     def record_check(self, harness_id: str, result: dict, *, seen: bool) -> dict:
         """Keep a check's summary. `next_baseline` becomes the baseline only once a person has seen it."""
         record = self.get(harness_id)

@@ -49,7 +49,7 @@ def format_registry(
             f"Industries in research: {covered}." if covered else "",
             str(note) if note else "",
             "You can still track **your own thesis** against EquityLayer's variable catalog: "
-            "`/el plan <your thesis in a sentence>`.",
+            "`/equitylayer:start`.",
             source,
         )
     rows = [
@@ -67,7 +67,7 @@ def format_registry(
     return _join(
         "## EquityLayer Research Registry",
         table,
-        "Next: `/el pack <id>`, `/el scorecard <id>`, or `/el follow <id>`.",
+        "Next: ask to read or follow one by its id.",
         source,
     )
 
@@ -232,7 +232,7 @@ def format_follow_created(record: dict, schedule_hint: str, already_following: b
 
 def format_follow_list(rows: list[dict], unreadable: list[str], schedule_hint: str) -> str:
     if not rows and not unreadable:
-        return "No local follows yet. Try `/el registry`, then `/el follow <id>` once a Pack is published."
+        return "No followed Research Pack yet. Ask whether one is published for your sector."
     table = _table(
         ["follow id", "target", "kind", "fresh until", "next check", "state"],
         [

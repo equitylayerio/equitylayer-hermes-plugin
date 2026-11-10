@@ -31,15 +31,41 @@ def test_track_readings_then_check_seen_and_list(make_service):
     assert [(i["id"], i["level"]) for i in listed["items"]] == [("cpo-curated-readings", "readings")]
 
 
-def test_adding_a_thesis_upgrades_the_same_item(make_service, tmp_path):
+def test_adding_a_thesis_keeps_the_readings_as_evidence(make_service, tmp_path):
     service, _, _ = make_service(ROUTES)
     call(service.el_track, {"title": "CPO readings", "variables": [FOCI], "theme": "optical_cpo"})
+    call(service.el_check)
     upgraded = call(service.el_track, {"item_id": "cpo-readings", "harness": HARNESS})
     assert upgraded["ok"] and upgraded["item_id"] == "cpo-readings" and upgraded["level"] == "your thesis"
-    assert upgraded["upgraded_from"] == "readings" and "now carry your thesis" in upgraded["markdown"]
-    assert not (tmp_path / "watchlists" / "cpo-readings.json").exists()
-    assert (tmp_path / "harnesses" / "cpo-readings.json").exists()
-    assert [i["level"] for i in call(service.el_list)["items"]] == ["your thesis"]
+    assert upgraded["readings_kept"] and "sits on top of your readings" in upgraded["markdown"]
+    assert (tmp_path / "watchlists" / "cpo-readings.json").exists()  # nothing is lost
+    harness = json.loads((tmp_path / "harnesses" / "cpo-readings.json").read_text())
+    assert harness["theme"] == "optical_cpo"
+    assert [i["level"] for i in call(service.el_list)["items"]] == ["your thesis + readings"]
+    page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
+    glance = page[page.index("At a glance"):page.index("Evidence")]
+    assert "Your thesis" in glance and "CPO and optical networking" in page and "All readings" in page
+
+
+def test_one_id_checks_and_marks_both_parts(make_service):
+    service, _, _ = make_service(ROUTES)
+    call(service.el_track, {"title": "CPO readings", "variables": [FOCI], "theme": "optical_cpo"})
+    call(service.el_track, {"item_id": "cpo-readings", "harness": HARNESS})
+    checked = call(service.el_check, {"item_id": "cpo-readings"})
+    assert checked["report_total"] == 2 and checked["awaiting_read"] == ["cpo-readings"]
+    assert call(service.el_seen, {"item_id": "cpo-readings"})["ok"]
+    listed = call(service.el_list)["items"][0]
+    assert listed["state"] != "unread"
+
+
+def test_changing_a_thesis_updates_it_instead_of_duplicating(make_service, tmp_path):
+    service, _, _ = make_service(ROUTES)
+    saved = call(service.el_track, {"harness": HARNESS})
+    changed = {**HARNESS, "why": "Updated reasoning."}
+    for key in ("item_id", "harness_id"):
+        result = call(service.el_track, {key: saved["item_id"], "harness": changed})
+        assert result["ok"] and result["item_id"] == saved["item_id"]
+    assert len(list((tmp_path / "harnesses").glob("*.json"))) == 1
 
 
 def test_ids_never_clash_across_levels(make_service):
@@ -83,3 +109,49 @@ def test_profile_and_research_pack_and_follow(make_service):
     followed = call(service.el_track, {"pack_id": "ai-compute-pcb-ccl-value-capture"})
     assert followed["ok"] and followed["level"] == "EquityLayer thesis" and followed["item_id"].startswith("follow_")
     assert "EquityLayer thesis" in [i["level"] for i in call(service.el_list)["items"]]
+
+
+def test_check_reports_errors_instead_of_going_silent(make_service, monkeypatch):
+    service, _, _ = make_service(ROUTES)
+    call(service.el_track, {"title": "CPO readings", "variables": [FOCI]})
+    call(service.el_check)
+    call(service.el_seen, {"item_id": "cpo-readings"})
+
+    def boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(type(service), "_watch_check", boom)
+    result = call(service.el_check)
+    assert result["ok"] and result["report_total"] == 1 and "Could not check your readings" in result["markdown"]
+
+
+def test_pending_pack_update_keeps_reporting(make_service):
+    routes = {**ROUTES, "check_research_follow": "check_follow_review_required"}
+    service, _, store = make_service(routes)
+    followed = call(service.el_track, {"pack_id": "ai-compute-pcb-ccl-value-capture"})
+    first = call(service.el_check)
+    assert first["report_total"] >= 1
+    again = call(service.el_check)
+    assert again["report_total"] >= 1 and followed["item_id"] in again["awaiting_read"]
+    refused = call(service.el_seen, {"item_id": followed["item_id"]})
+    assert refused["error"] == "accept_needs_confirmation"
+
+
+def test_ids_and_levels_are_checked(make_service):
+    service, _, _ = make_service(ROUTES)
+    thesis = call(service.el_track, {"harness": HARNESS})["item_id"]
+    follow = call(service.el_track, {"pack_id": "ai-compute-pcb-ccl-value-capture"})["item_id"]
+    assert call(service.el_track, {"item_id": follow, "harness": HARNESS})["error"] == "invalid_argument"
+    assert call(service.el_track, {"item_id": follow, "variables": [FOCI]})["error"] == "invalid_argument"
+    assert call(service.el_check, {"item_id": 123})["error"] == "invalid_argument"
+    added = call(service.el_track, {"item_id": thesis, "variables": [FOCI]})
+    assert added["ok"] and added["item_id"] == thesis and added["level"] == "your thesis"
+
+
+def test_updating_readings_keeps_title_and_cron_cannot_change_items(make_service):
+    service, _, _ = make_service(ROUTES)
+    call(service.el_track, {"title": "CPO readings", "variables": [FOCI], "theme": "optical_cpo"})
+    updated = call(service.el_track, {"item_id": "cpo-readings", "variables": [FOCI]})
+    assert updated["ok"] and "CPO readings" in updated["markdown"]
+    cron, _, _ = make_service(ROUTES, in_cron=True)
+    assert call(cron.el_track, {"title": "x", "variables": [FOCI]})["error"] == "not_in_scheduled_run"

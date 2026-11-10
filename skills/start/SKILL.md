@@ -27,7 +27,7 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
 - If `returning` is true, greet them by what they follow, and offer:
   1. Show my dashboard (recommended).
   2. Check everything now.
-  3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings keep their id and gain the thesis.
+  3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings stay under the same id and become the thesis's evidence.
   4. Add a sector.
   Skip any decision already answered.
 - If the registry lists a Research Pack, note it inside the matching sector option ("CPO and optical networking: EquityLayer Pack available"), so decision 1 keeps four options. If they pick that sector, offer the Pack as the first way to follow it in decision 2: read it with `el_research_pack` (action `read`) and, on yes, follow it with `el_track` (`pack_id`).
@@ -96,7 +96,7 @@ For a view, explain the statuses in one line:
 3. I've read it; only when I ask.
 4. Not read yet.
 
-For 1 to 3, mark the check as read: `el_seen` with the `item_id`.
+For 1 to 3, mark the check as read: `el_seen` with the `item_id` (readings or their own thesis). For a followed Research Pack there is nothing to mark; `el_seen` with `accept_update` is only for accepting a Pack update the person explicitly agreed to.
 For 4, mark nothing and schedule nothing. Say they can say "I've read it" any time, and ask about frequency then.
 
 For 1 or 2, create one job with the `cronjob` tool, so results come back to this chat:

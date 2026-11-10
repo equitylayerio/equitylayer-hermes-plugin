@@ -89,7 +89,7 @@ def test_live_unavailable_error_gets_a_registry_hint(make_service):
     service, _, _ = make_service({"get_research_pack": "get_research_pack_unavailable"})
     result = call(service.el_get_pack, {"pack_id": "ai-compute-pcb-ccl-value-capture"})
     assert result["error"] == "research_pack_unavailable"
-    assert "el_list_registry" in result["hint"]
+    assert "el_research_pack" in result["hint"]
 
 
 def test_other_hosts_are_refused_without_a_call(make_service):
@@ -269,7 +269,7 @@ def test_slash_flow_end_to_end(make_service):
     assert follow_id in el("follows", session_id="s", platform="cli")
     assert "current" in el(f"follow-check {follow_id}")
     assert "Removed" in el(f"unfollow {follow_id}")
-    assert "No local follows yet" in el("follows")
+    assert "You don't track anything yet" in el("follows")
 
 
 def test_slash_errors_are_readable(make_service):
