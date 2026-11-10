@@ -149,7 +149,7 @@ def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_
     assert 'data-hermes-send="Yes, follow these curated readings."' in page and "<script" not in page
     assert "224,257" in page and "Open Government Data License" in page
     assert not (tmp_path / "watchlists").exists() and not (tmp_path / "profile.json").exists()
-    assert transport.names() == ["get_variable"]
+    assert transport.names() == ["get_variable", "list_registry"]
     plain = json.loads(service.el_dashboard_render({}))
     assert "Live now" not in open(plain["artifact_file"], encoding="utf-8").read()
 
@@ -194,3 +194,47 @@ def test_dashboard_leads_with_the_thesis_then_evidence(make_service, tmp_path):
     page = open(json.loads(service.el_dashboard_render({}))["artifact_file"], encoding="utf-8").read()
     glance = page[page.index("At a glance"):page.index("Evidence")]
     assert "Your thesis" in glance and "Holding so far" in glance and harness["hypothesis"][:40] in glance
+
+
+PACK_ID = "taiwan-optical-revenue-vs-cpo-guidance"
+
+
+def _page(service, args=None):
+    return open(json.loads(service.el_dashboard_render(args or {}))["artifact_file"], encoding="utf-8").read()
+
+
+def test_dashboard_offers_the_published_cpo_pack(make_service):
+    service, transport, _ = make_service({**ROUTES, "list_registry": "list_registry_cpo"})
+    page = _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+    assert "EquityLayer Research Pack · CPO and optical networking · published" in page
+    assert "What Taiwan&#x27;s optical suppliers report" in page and "none of nine suppliers" in page
+    assert f'data-hermes-send="Follow the EquityLayer Research Pack {PACK_ID}."' in page
+    assert f"https://equitylayer.io/research/packs/{PACK_ID}" in page and "in preparation" not in page
+    _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+    assert transport.names().count("list_registry") == 1  # the registry is cached for 12 hours
+
+
+def test_dashboard_shows_a_followed_pack_even_with_nothing_else_tracked(make_service):
+    from equitylayer_plugin.follows import build_record
+
+    service, _, store = make_service({"list_registry": "list_registry_cpo"})
+    store.save(build_record({"follow_id": "follow_" + "a" * 32, "pack_id": PACK_ID, "fresh_until": "2026-11-17"}))
+    page = _page(service)
+    assert "Nothing tracked yet" not in page
+    assert "EquityLayer Research Pack · CPO and optical networking · you follow it" in page and "next check 2026-11-17" in page
+    assert "Follow this Pack" not in page
+
+
+def test_dashboard_pack_card_says_in_review_or_unknown_honestly(make_service):
+    service, _, _ = make_service({**ROUTES, "list_registry": "list_registry_cpo_in_review"})
+    page = _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+    assert "is in review, not published yet" in page and "Follow this Pack" not in page
+
+    service, _, _ = make_service({**ROUTES, "list_registry": "list_registry_empty"})
+    (service._dashboard_root() / "packs.json").unlink()
+    assert "is in preparation" in _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+
+    service, _, _ = make_service(ROUTES)  # registry unreachable and never seen: no claim either way
+    (service._dashboard_root() / "packs.json").unlink()
+    page = _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
+    assert "in preparation" not in page and "any published Research Pack" in page

@@ -27,6 +27,7 @@ SECTOR_PAGES = {
     "physical_ai": "https://equitylayer.io/themes/physical-ai",
 }
 SITE = "https://equitylayer.io"
+PACK_PAGE = "https://equitylayer.io/research/packs/"
 STATUS_TEXT = {"seen": "seen", "against": "against", "late": "late", "no_data": "no data", "not_due": "not due"}
 
 
@@ -300,8 +301,82 @@ def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: 
     return f'<aside class="side">{"".join(items)}</aside>'
 
 
+def _clip(text: Any, limit: int = 280) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _pack_url(entry: dict) -> str:
+    return _https(entry.get("url")) or PACK_PAGE + str(entry.get("id"))
+
+
+def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str, dict]) -> list[str]:
+    """One card per sector: the published EquityLayer Research Pack, whether the user follows it, or where it stands.
+
+    `packs` is the last registry the plugin saw (None when it has never seen one), so the card never claims a Pack
+    is missing or in preparation without having looked.
+    """
+    cards, shown = [], set()
+    entries = [p for p in packs or [] if isinstance(p, dict) and p.get("kind") == "pack" and p.get("id")]
+    for pid in followed:
+        if pid not in {p["id"] for p in entries}:
+            entries.append({"id": pid, "kind": "pack", "title": pid, "theme_id": None, "status": "verified",
+                            "access": "public"})
+    followed_themes = [p.get("theme_id") for p in entries if p["id"] in followed and p.get("theme_id")]
+    for theme in themes + [t for t in followed_themes if t not in themes]:
+        mine = [p for p in entries if p.get("theme_id") == theme]
+        label = _theme_label(theme)
+        page = SECTOR_PAGES.get(theme, SITE)
+        published = [p for p in mine if p.get("status") == "verified" and p.get("access") == "public"]
+        for p in published[:2]:
+            shown.add(p["id"])
+            cards.append(_pack_card(p, label, followed.get(p["id"])))
+        if published:
+            continue
+        review = [p for p in mine if p.get("status") == "in_review"]
+        if review:
+            text = (f'{_e(review[0].get("title"))} is in review, not published yet. It can be read and followed '
+                    'once it is published.')
+        elif packs is not None:
+            text = ("EquityLayer's own thesis for this sector, verified by its research team with the readings that "
+                    "would prove it wrong, is in preparation. See the industry map and get notified when it is "
+                    "published.")
+        else:
+            text = ("EquityLayer's research for this sector is on equitylayer.io: the industry map, the segments it "
+                    "tracks and any published Research Pack.")
+        cards.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack · {_e(label)}</p>'
+                     f'<p>{text}</p><p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
+    for p in entries:
+        if p["id"] in followed and p["id"] not in shown:
+            cards.append(_pack_card(p, None, followed[p["id"]]))
+    return cards
+
+
+def _pack_card(entry: dict, label: str | None, follow: dict | None) -> str:
+    state = "you follow it" if follow else "published"
+    eyebrow = "EquityLayer Research Pack" + (f" · {label}" if label else "") + f" · {state}"
+    parts = [f'<section class="card pack"><p class="eyebrow">{_e(eyebrow)}</p>',
+             f'<h3>{_e(entry.get("title") or entry.get("id"))}</h3>']
+    if entry.get("view"):
+        parts.append(f'<p>{_e(_clip(entry["view"]))}</p>')
+    if follow:
+        due = follow.get("next_check_at") or follow.get("fresh_until")
+        parts.append(f'<p class="muted small">Checked with your other items' + (f"; next check {_e(due)}" if due else "")
+                     + '. Hermes shows you when the Pack changes.</p>')
+        parts.append(f'<p><a class="go" href="{_e(_pack_url(entry))}">Read it on equitylayer.io →</a></p>')
+    else:
+        parts.append('<p class="muted small">Its hypotheses, what would prove each wrong, and the readings it watches.'
+                     '</p><div class="actions">'
+                     f'<button type="button" data-hermes-send="Follow the EquityLayer Research Pack {_e(entry.get("id"))}.">'
+                     'Follow this Pack</button>'
+                     f'<a class="go" href="{_e(_pack_url(entry))}">Read it on equitylayer.io →</a></div>')
+    return "".join(parts) + "</section>"
+
+
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
-           preview: dict | None = None, saved_at: str = "") -> str:
+           preview: dict | None = None, saved_at: str = "", packs: list[dict] | None = None,
+           followed: dict[str, dict] | None = None) -> str:
+    followed = followed or {}
     stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
     about = describe(profile)
     needs = []
@@ -340,7 +415,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
             continue
         seen_up.add(key)
         up_items += f'<li><span class="muted">{_e(u.get("date"))}</span> {_e(u.get("names"))}: {_e(u.get("reason"))}</li>'
-    empty = not theses and not watchlists and not preview
+    empty = not theses and not watchlists and not preview and not followed
     body = [
         f'<header><div class="brand"><svg width="26" height="26" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="3" fill="#173f32"/><circle cx="27.5" cy="10.5" r="4.25" fill="#c49a50"/><rect x="8.5" y="12.5" width="21" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="20.25" width="15" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="28" width="21" height="5.25" fill="#f8f5eb"/></svg>EquityLayer</div><p class="eyebrow">Discover → Follow → Track changes</p>'
         f'<h1>Your research</h1><p class="muted">Updated {_e(stamp)}'
@@ -371,12 +446,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
-    for theme in pack_themes[:3]:
-        page = SECTOR_PAGES.get(theme, SITE)
-        body.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack · {_e(_theme_label(theme))}</p>'
-                    f'<p>EquityLayer\'s own thesis for this sector, verified by its research team with the readings that '
-                    f'would prove it wrong, is in preparation. See the industry map and get notified when it is published.</p>'
-                    f'<p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
+    body += _pack_cards(pack_themes[:3], packs, followed)
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:
@@ -435,7 +505,7 @@ tr.grp td{{font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppe
 border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}.chip{{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}}
 .s-seen{{color:var(--seen)}}.s-against{{color:var(--against)}}.s-late{{color:var(--late)}}.s-no_data,.s-not_due{{color:var(--nodata)}}
-.actions{{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
+.actions{{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
 .sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}

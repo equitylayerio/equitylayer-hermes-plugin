@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import time
 from typing import Any, Callable
 
 from . import formatters
@@ -17,6 +18,9 @@ from . import dashboard as dashboard_page
 from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
+
+PACK_INDEX = "packs.json"
+PACK_INDEX_MAX_AGE = 12 * 3600
 
 logger = logging.getLogger(__name__)
 
@@ -149,13 +153,44 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
     def _dashboard_root(self):
         return self._harness_store_factory().dir.parent
 
-    def _render_dashboard(self, preview: dict | None = None):
+    def _render_dashboard(self, preview: dict | None = None, refresh_packs: bool = False):
         theses, _ = self._harness_store_factory().all()
         watchlists, _ = self._watch_store_factory().all()
+        follows, _ = self._store_factory().all()
+        followed = {f.get("target_id"): f for f in follows if f.get("target_kind") == "pack" and f.get("target_id")}
         target = self._dashboard_root() / dashboard_page.FILE_NAME
         page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview,
-                                     saved_at=str(target))
+                                     saved_at=str(target), packs=self._pack_index(refresh_packs), followed=followed)
         return dashboard_page.write(self._dashboard_root(), page)
+
+    # The last registry this plugin saw, so the dashboard can say which Research Packs are published.
+    def _save_pack_index(self, entries: Any) -> list[dict]:
+        rows = [{"id": e.get("id"), "kind": e.get("kind"), "title": e.get("title"), "theme_id": e.get("theme_id"),
+                 "status": e.get("status"), "access": e.get("access"), "view": e.get("view"),
+                 "url": (e.get("cite_as") or {}).get("url") if isinstance(e.get("cite_as"), dict) else None}
+                for e in entries or [] if isinstance(e, dict) and e.get("id")]
+        path = self._dashboard_root() / PACK_INDEX
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"fetched_at": time.time(), "entries": rows}, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+        return rows
+
+    def _pack_index(self, refresh: bool = False) -> list[dict] | None:
+        try:
+            data = json.loads((self._dashboard_root() / PACK_INDEX).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None
+        rows = data.get("entries") if isinstance(data, dict) and isinstance(data.get("entries"), list) else None
+        stale = rows is None or time.time() - float(data.get("fetched_at") or 0) > PACK_INDEX_MAX_AGE
+        if refresh and stale:
+            try:
+                url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL)
+                payload = McpClient(url, transport=self._transport, timeout=8.0).call_tool("list_registry", {})
+                rows = self._save_pack_index(payload.get("entries"))
+            except Exception:  # noqa: BLE001 - the dashboard renders from the last registry it saw
+                logger.info("EquityLayer registry not refreshed for the dashboard", exc_info=True)
+        return rows
 
     def _preview(self, args: dict) -> dict | None:
         """Live readings shown before anything is saved, so the dashboard has something on the first turn."""
@@ -185,7 +220,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             logger.warning("EquityLayer dashboard not refreshed", exc_info=True)
 
     def _dashboard(self, args: dict) -> dict:
-        path = self._render_dashboard(self._preview(args))
+        path = self._render_dashboard(self._preview(args), refresh_packs=True)
         return {
             "ok": True,
             "artifact_file": str(path),
@@ -208,6 +243,11 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         arguments = {"publisher": args["publisher"]} if _text_arg(args, "publisher") else {}
         payload = self._call("list_registry", arguments)
         entries = [self._compact_entry(e) for e in payload.get("entries") or [] if isinstance(e, dict)]
+        if not arguments:
+            try:
+                self._save_pack_index(payload.get("entries"))
+            except OSError:
+                logger.info("EquityLayer registry not saved locally", exc_info=True)
         self._locked_ids = {e["id"] for e in entries if e["locked"]}
         return {
             "ok": True,

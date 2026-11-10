@@ -59,3 +59,18 @@ def test_registry_marks_in_review_entries_as_not_published():
     text = format_registry([{"id": "cpo-pack", "title": "CPO Pack", "status": "in_review", "kind": "in_review"}])
     assert "in review, not published yet" in text and "can't be read or followed" in text
     assert "ask to read or follow" not in text
+
+
+
+def test_pack_format_v1_shows_view_hypotheses_and_sources():
+    import json
+    from support import fixture_text
+    from equitylayer_plugin.formatters import format_pack
+
+    line = [l for l in fixture_text("get_research_pack_cpo_v1").splitlines() if l.startswith("data: ")][0][6:]
+    pack = json.loads(json.loads(line)["result"]["content"][0]["text"])
+    text = format_pack(pack)
+    assert "What Taiwan's optical suppliers report" in text and "**View:**" in text
+    assert "LandMark, a laser epi supplier" in text and "Would be wrong if:" in text and "`v:3081.two.revenue.monthly`" in text
+    assert "(management claim)" in text and "Not covered" in text and "Cite as:" in text
+    assert "sha256:" not in text.split("## Evidence")[0] and "https://" not in text

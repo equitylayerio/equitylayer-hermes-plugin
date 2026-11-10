@@ -79,7 +79,70 @@ def format_registry(
     )
 
 
+def _plain(text: Any) -> str:
+    return str(text or "").replace("https://", "").replace("http://", "")
+
+
+def _domain(url: Any) -> str:
+    host = _plain(url).split("/")[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+def _clip(text: Any, limit: int = 320) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _format_pack_v1(pack: dict) -> str:
+    """Research Pack format v1: a view, hypotheses with their tests and watches, evidence claims, sources."""
+    cite = pack.get("cite_as") if isinstance(pack.get("cite_as"), dict) else {}
+    fresh = pack.get("freshness") if isinstance(pack.get("freshness"), dict) else {}
+    meta = [f"revision {pack.get('revision')}" if pack.get("revision") else None,
+            f"as of {pack.get('as_of')}" if pack.get("as_of") else None,
+            f"status {pack.get('status')}" if pack.get("status") else None,
+            f"fresh until {fresh.get('fresh_until')}" if fresh.get("fresh_until") else None]
+    hyps = []
+    for n, h in enumerate([h for h in pack.get("hypotheses") or [] if isinstance(h, dict)], 1):
+        a = h.get("assertion") if isinstance(h.get("assertion"), dict) else {}
+        test = h.get("test") if isinstance(h.get("test"), dict) else {}
+        watches = ", ".join(f"`{w.get('variable')}`" for w in h.get("watches") or [] if isinstance(w, dict) and w.get("variable"))
+        lines = [f"{n}. **{_clip(a.get('statement'), 400)}**",
+                 f"   - Confidence {h.get('confidence') or '—'} · state {h.get('state') or '—'}"]
+        if test.get("falsifier"):
+            lines.append(f"   - Would be wrong if: {_clip(test['falsifier'])}" + (f" (by {test['due']})" if test.get("due") else ""))
+        if watches:
+            lines.append(f"   - Watching: {watches}")
+        if a.get("limitation"):
+            lines.append(f"   - Limits: {_clip(a['limitation'])}")
+        hyps.append("\n".join(lines))
+    label = {"reported_fact": "reported fact", "management_claim": "management claim", "derived_value": "derived value"}
+    claims, all_claims = [], [c for c in pack.get("claims") or [] if isinstance(c, dict)]
+    for c in all_claims[:8]:
+        a = c.get("assertion") if isinstance(c.get("assertion"), dict) else {}
+        ids = ", ".join((c.get("provenance") or {}).get("source_ids") or [])
+        claims.append(f"- ({label.get(a.get('kind'), a.get('kind') or 'claim')}) {_clip(a.get('statement'), 260)}"
+                      + (f" [{ids}]" if ids else ""))
+    if len(all_claims) > 8:
+        claims.append(f"- …and {len(all_claims) - 8} more on the Pack page.")
+    sources = [f"- {s.get('id')}: {s.get('publisher') or ''}" + (f" ({_domain(s.get('url'))})" if _domain(s.get("url")) else "")
+               for s in pack.get("sources") or [] if isinstance(s, dict)][:12]
+    return _join(
+        f"## {cite.get('title') or pack.get('title') or pack.get('pack_id')}",
+        " · ".join(m for m in meta if m),
+        f"**View:** {pack['view']}" if pack.get("view") else "",
+        _section("Hypotheses", "\n".join(hyps)) if hyps else "",
+        _section("Evidence", "\n".join(claims)) if claims else "",
+        _section("Not covered", _bullets(pack.get("not_covered"))),
+        _section("Sources", "\n".join(sources)) if sources else "",
+        f"Cite as: {_plain(cite.get('text'))}" if cite.get("text") else "",
+        DISCLAIMER,
+    )
+
+
 def format_pack(pack: dict, max_records: int = 10, title: Any = None) -> str:
+    if pack.get("view") or any(isinstance(h, dict) and isinstance(h.get("assertion"), dict)
+                               for h in pack.get("hypotheses") or []):
+        return _format_pack_v1(pack)
     pack_id = pack.get("pack_id") or "research pack"
     meta = [
         f"Period **{pack['report_period'] or pack.get('period')}**" if pack.get("report_period") else None,
