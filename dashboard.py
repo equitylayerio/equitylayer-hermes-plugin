@@ -164,6 +164,55 @@ def _thesis_card(record: dict) -> str:
             f'{_e(last.get("next_due") or "—")}</p><div class="chips">{chips}</div>{"".join(alerts)}</section>')
 
 
+THEME_LABELS = {"optical_cpo": "CPO and optical networking", "custom_asic": "Custom AI chips (ASIC)",
+                "space_infrastructure": "Space infrastructure", "physical_ai": "Physical AI", "other": "Other"}
+THEME_ORDER = ("optical_cpo", "custom_asic", "space_infrastructure", "physical_ai", "other")
+
+
+def _theme_of(record: dict) -> str:
+    theme = record.get("theme")
+    if not theme and isinstance(record.get("harness"), dict):
+        theme = record["harness"].get("theme_id") or record["harness"].get("theme")
+    return theme if theme in THEME_LABELS else "other"
+
+
+def _theme_label(theme: str) -> str:
+    return THEME_LABELS.get(theme, "Other")
+
+
+def _theme_order(theme: str) -> int:
+    return THEME_ORDER.index(theme) if theme in THEME_ORDER else len(THEME_ORDER)
+
+
+def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: bool) -> str:
+    items = ['<p class="side-label">Workspace</p><nav>']
+    if preview:
+        items.append('<a href="#live">Live now</a>')
+    if needs:
+        items.append('<a href="#needs">Needs you</a>')
+    items.append('<a href="#events">Events and dates</a></nav>')
+    if groups:
+        items.append('<p class="side-label">Themes</p><nav>')
+        for theme in sorted(groups, key=_theme_order):
+            group = groups[theme]
+            subs = [r.get("title") for r in group["watch"]] + [r.get("title") for r in group["theses"]]
+            items.append(f'<a href="#theme-{_e(theme)}">{_e(_theme_label(theme))}</a>'
+                         + "".join(f'<span class="side-sub">{_e(t)}</span>' for t in subs[:4]))
+        items.append("</nav>")
+    companies: dict[str, str] = {}
+    for record in watchlists:
+        for row in ((record.get("last_check") or {}).get("rows") or []):
+            companies.setdefault(_company(row), str(row.get("entity") or ""))
+    for row in ((preview or {}).get("rows") or []):
+        companies.setdefault(_company(row), str(row.get("entity") or ""))
+    if companies:
+        items.append('<p class="side-label">Companies</p><nav class="cos">')
+        items += [f'<span class="side-co">{_e(name)}<small>{_e(ent)}</small></span>' for name, ent in list(companies.items())[:16]]
+        items.append("</nav>")
+    items.append('<p class="side-foot">Saved on this machine</p>')
+    return f'<aside class="side">{"".join(items)}</aside>'
+
+
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
            preview: dict | None = None) -> str:
     stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
@@ -221,17 +270,24 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                    '<button type="button" data-hermes-send="Yes, follow these curated readings.">Follow these readings</button>'
                    '<button type="button" class="ghost" data-hermes-send="I have my own view.">I have my own view</button>'
                    '</div>')
-        body.append("<h2>Live now</h2>" + card + actions)
+        body.append('<h2 id="live">Live now</h2>' + card + actions)
         for row in preview.get("rows") or []:
             sources += [a for a in row.get("attribution") or [] if a not in sources]
     if needs:
-        body.append(f'<section class="card needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
-    if watchlists:
-        body.append("<h2>Following</h2>" + "".join(_watch_card(r) for r in watchlists))
-    if theses:
-        body.append("<h2>Your theses</h2>" + "".join(_thesis_card(r) for r in theses))
+        body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
+    # Themes in the main column, one section per sector (the earlier local-workspace layout).
+    groups: dict[str, dict[str, list]] = {}
+    for record in watchlists:
+        groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["watch"].append(record)
+    for record in theses:
+        groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
+    for theme in sorted(groups, key=_theme_order):
+        group = groups[theme]
+        body.append(f'<h2 id="theme-{_e(theme)}">{_e(_theme_label(theme))}</h2>'
+                    + "".join(_watch_card(r) for r in group["watch"])
+                    + "".join(_thesis_card(r) for r in group["theses"]))
     if event_items:
-        body.append(f'<section class="card"><h2>Recent events</h2><ul>{event_items}</ul></section>')
+        body.append(f'<section class="card" id="events"><h2>Recent events</h2><ul>{event_items}</ul></section>')
     if up_items:
         body.append(f'<section class="card"><h2>Coming up</h2><ul>{up_items}</ul></section>')
     if sources:
@@ -239,6 +295,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                     + "".join(f"<li>{_e(s)}</li>" for s in sources[:12]) + "</ul></section>")
     body.append('<footer class="muted small">Generated on this machine from your local files. EquityLayer reports '
                 "what moved and stops: nothing here says what to buy, sell, size or time. Not investment advice.</footer>")
+    sidebar = _sidebar(groups, watchlists, preview, bool(needs))
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EquityLayer research</title>
@@ -249,8 +306,8 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
-main{{max-width:980px;margin:0 auto;padding:22px 16px 44px}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
 h1{{font:400 40px/1.05 var(--display);letter-spacing:-.01em;margin:0 0 6px}}h2{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;
@@ -281,9 +338,9 @@ border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:poi
 a{{color:var(--forest-2)}}footer{{margin-top:28px}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}
-</style></head><body><main>
+</style></head><body><div class="layout">{sidebar}<main>
 {"".join(body)}
-</main></body></html>
+</main></div></body></html>
 """
 
 
