@@ -139,3 +139,15 @@ def test_profile_counts_a_watchlist_as_returning(make_service):
     got = json.loads(service.el_profile_get({}))
     assert got["returning"] is True and got["saved_watchlists"][0]["id"] == "cpo-curated-readings"
     assert "Following: 1 watchlist(s)" in got["markdown"]
+
+
+def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_path):
+    service, transport, _ = make_service(ROUTES)
+    result = json.loads(service.el_dashboard_render({"preview_variables": [FOCI], "preview_title": "CPO live readings"}))
+    page = open(result["artifact_file"], encoding="utf-8").read()
+    assert "Live now" in page and "CPO live readings" in page and "preview, not saved" in page
+    assert "224,257" in page and "Open Government Data License" in page
+    assert not (tmp_path / "watchlists").exists() and not (tmp_path / "profile.json").exists()
+    assert transport.names() == ["get_variable"]
+    plain = json.loads(service.el_dashboard_render({}))
+    assert "Live now" not in open(plain["artifact_file"], encoding="utf-8").read()

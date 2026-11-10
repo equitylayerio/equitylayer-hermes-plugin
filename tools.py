@@ -148,11 +148,30 @@ class EquityLayerTools(HarnessTools, WatchTools):
     def _dashboard_root(self):
         return self._harness_store_factory().dir.parent
 
-    def _render_dashboard(self):
+    def _render_dashboard(self, preview: dict | None = None):
         theses, _ = self._harness_store_factory().all()
         watchlists, _ = self._watch_store_factory().all()
-        page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists)
+        page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview)
         return dashboard_page.write(self._dashboard_root(), page)
+
+    def _preview(self, args: dict) -> dict | None:
+        """Live readings shown before anything is saved, so the dashboard has something on the first turn."""
+        if not args.get("preview_variables"):
+            return None
+        from .harness_store import today_taipei
+        from .watch_tools import _row, _unavailable_row
+        from .watch_store import validate_variables
+
+        rows = []
+        for variable in validate_variables(args.get("preview_variables")):
+            try:
+                row = _row(variable, self._call("get_variable", {"variable": variable}), None)
+            except McpError as exc:
+                row = _unavailable_row(variable, exc)
+            row["new"] = False
+            rows.append(row)
+        title = " ".join(str(args.get("preview_title") or "Live readings").split())[:80]
+        return {"title": title, "as_of": today_taipei(), "rows": rows}
 
     def _refresh_dashboard(self) -> None:
         """Keep the local page current after a check. A failure here never fails the check."""
@@ -162,7 +181,7 @@ class EquityLayerTools(HarnessTools, WatchTools):
             logger.warning("EquityLayer dashboard not refreshed", exc_info=True)
 
     def _dashboard(self, args: dict) -> dict:
-        path = self._render_dashboard()
+        path = self._render_dashboard(self._preview(args))
         return {
             "ok": True,
             "artifact_file": str(path),

@@ -316,7 +316,16 @@ EL_DASHBOARD_RENDER = {
     "description": (
         "Render the person's local EquityLayer dashboard (what they follow, their theses, what needs them, recent "
         "events, what is due next) to an HTML file on this machine and return its path. Built from local files "
-        "only; contacts no one. Hermes Desktop lists it under Artifacts."
+        "only; contacts no one. Hermes Desktop lists it under Artifacts. Pass preview_variables (the live readings "
+        "you just showed) to add a 'Live now' preview before anything is saved; it reads them from EquityLayer and "
+        "saves nothing."
     ),
-    "parameters": {"type": "object", "properties": {}},
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "preview_variables": {"type": "array", "items": {"type": "string"},
+                                  "description": "Up to 8 variable ids to show as a not-saved preview."},
+            "preview_title": {"type": "string", "description": "Short title, for example \"CPO live readings\"."},
+        },
+    },
 }

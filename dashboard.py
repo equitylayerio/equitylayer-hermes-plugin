@@ -7,6 +7,7 @@ written by a model. It contacts no one: no scripts, no external fonts, no remote
 from __future__ import annotations
 
 import html
+import re
 import os
 import tempfile
 from datetime import datetime
@@ -70,8 +71,10 @@ def _watch_card(record: dict) -> str:
             f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
     table = ('<div class="tbl"><table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
              f'<tbody>{"".join(rows)}</tbody></table></div>')
-    return (f'<section class="card">{head}<p class="muted">Checked {_e(last.get("as_of"))} · '
-            f'{_e(last.get("new_count", 0))} new · next check {_e(last.get("next_due"))}</p>{table}</section>')
+    new = last.get("new_count", 0)
+    new_part = f" · {_e(new)} new" if new is not None else ""
+    return (f'<section class="card">{head}<p class="muted">Checked {_e(last.get("as_of"))}{new_part} · '
+            f'next check {_e(last.get("next_due"))}</p>{table}</section>')
 
 
 def _thesis_card(record: dict) -> str:
@@ -96,7 +99,8 @@ def _thesis_card(record: dict) -> str:
             f'{_e(last.get("next_due") or "—")}</p><div class="chips">{chips}</div>{"".join(alerts)}</section>')
 
 
-def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None) -> str:
+def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
+           preview: dict | None = None) -> str:
     stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
     about = describe(profile)
     needs = []
@@ -135,13 +139,21 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
             continue
         seen_up.add(key)
         up_items += f'<li><span class="muted">{_e(u.get("date"))}</span> {_e(u.get("names"))}: {_e(u.get("reason"))}</li>'
-    empty = not theses and not watchlists
+    empty = not theses and not watchlists and not preview
     body = [
         f'<header><h1>Your EquityLayer research</h1><p class="muted">Updated {_e(stamp)}'
         + (f" · {_e(about)}" if about else "") + "</p></header>",
     ]
     if empty:
         body.append('<section class="card"><p>Nothing tracked yet. In Hermes, type <code>/equitylayer:start</code>.</p></section>')
+    if preview:
+        card = _watch_card({"title": preview.get("title"), "pending": None,
+                            "last_check": {"as_of": preview.get("as_of"), "rows": preview.get("rows") or [],
+                                           "new_count": None, "next_due": "after you save"}})
+        card = re.sub(r'<span class="tag[^"]*">[^<]*</span>', '<span class="tag">preview, not saved</span>', card, count=1)
+        body.append("<h2>Live now</h2>" + card)
+        for row in preview.get("rows") or []:
+            sources += [a for a in row.get("attribution") or [] if a not in sources]
     if needs:
         body.append(f'<section class="card needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if watchlists:

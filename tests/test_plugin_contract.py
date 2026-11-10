@@ -113,8 +113,9 @@ def test_start_skill_defaults_to_english_and_introduces_equitylayer_briefly():
     assert "no superlatives" in text
 
 
-def test_dashboard_is_offered_right_after_the_first_check():
+def test_dashboard_preview_comes_with_the_live_readings():
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
+    preview = text.index("Then call `el_dashboard_render` with `preview_variables`")
+    assert text.index("Before decision 2, show what is live") < preview < text.index("## Decision 2.")
     first_check = text.index("**Then check once:**")
-    offer = text.index("Then call `el_dashboard_render` and add one line")
-    assert first_check < offer < text.index("## Decision 4.")
+    assert first_check < text.index("Then call `el_dashboard_render` (no preview now)") < text.index("## Decision 4.")

@@ -42,6 +42,8 @@ Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO
 
 A withheld value is no data: say why, and never guess it.
 
+Then call `el_dashboard_render` with `preview_variables` (those three ids) and `preview_title` ("<sector> live readings"), and add one line: their dashboard already shows these readings under Artifacts (`dashboard.html`); nothing is saved until they say yes.
+
 **If the sector has no live readings yet** (the plan returns no candidates, as space does today), say so in one line and ask instead:
 1. Pick another sector (recommended).
 2. Write my view anyway; it will show gaps until readings arrive.
@@ -76,7 +78,7 @@ On yes, call `el_harness_save`. If EquityLayer rejects a word, say so and sugges
 - For curated readings: `el_watch_check` with the watch id.
 - For a view: `el_harness_check` with the harness id.
 
-Show the markdown as returned. Then call `el_dashboard_render` and add one line: their dashboard now shows these readings and is under Artifacts (`dashboard.html`); it is built on this machine and contacts no one.
+Show the markdown as returned. Then call `el_dashboard_render` (no preview now) and add one line: the dashboard now follows these readings; it is built on this machine and contacts no one.
 
 For a view, explain the statuses in one line:
 - 🟢 seen
