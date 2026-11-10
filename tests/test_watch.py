@@ -175,3 +175,22 @@ def test_dashboard_says_where_it_lives_and_links_the_sector_page(make_service, t
     assert str(tmp_path / "dashboard.html") in page
     assert 'href="https://equitylayer.io/themes/optical-cpo"' in page and "EquityLayer Research Pack" in page
     assert ">Revenue pulse<" in page
+
+
+def test_dashboard_leads_with_the_thesis_then_evidence(make_service, tmp_path):
+    from equitylayer_plugin.harness_store import HarnessStore
+    from pathlib import Path
+
+    service, _, _ = make_service(ROUTES)
+    _save(service)
+    service.el_watch_check({})
+    page = open(json.loads(service.el_dashboard_render({}))["artifact_file"], encoding="utf-8").read()
+    assert "What your readings show" in page and "This describes the readings, not a view." in page
+    assert page.index("At a glance") < page.index("Evidence")
+    harness = json.loads((Path(__file__).parent / "harness_demo.json").read_text())["harness"]
+    HarnessStore(tmp_path).save_harness("cpo", harness)
+    HarnessStore(tmp_path).record_check("cpo", {"as_of": "2026-11-10", "links": [{"id": "a", "status": "seen"}],
+                                                 "next_due": {"date": "2026-11-14"}}, seen=True)
+    page = open(json.loads(service.el_dashboard_render({}))["artifact_file"], encoding="utf-8").read()
+    glance = page[page.index("At a glance"):page.index("Evidence")]
+    assert "Your thesis" in glance and "Holding so far" in glance and harness["hypothesis"][:40] in glance

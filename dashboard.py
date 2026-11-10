@@ -163,8 +163,8 @@ def _watch_card(record: dict) -> str:
             f'<td class="num">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
             f'<td class="num">{_e(r.get("change"))}</td><td>{_spark(r.get("recent") or [])}</td>'
             f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
-    table = ('<div class="tbl"><table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
-             f'<tbody>{"".join(rows)}</tbody></table></div>')
+    table = ('<details class="more" open><summary>All readings</summary><div class="tbl"><table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
+             f'<tbody>{"".join(rows)}</tbody></table></div></details>')
     new = last.get("new_count", 0)
     new_part = f" · {_e(new)} new" if new is not None else ""
     return (f'<section class="card">{head}<p class="muted">Checked {_e(last.get("as_of"))}{new_part} · '
@@ -193,6 +193,63 @@ def _thesis_card(record: dict) -> str:
             f'{_e(last.get("next_due") or "—")}</p><div class="chips">{chips}</div>{"".join(alerts)}</section>')
 
 
+def _verdict(last: dict) -> tuple[str, str]:
+    """A plain status for the thesis from the harness check. It describes the evidence, not a trade."""
+    counts = last.get("counts") or {}
+    if last.get("wrong_if_fired"):
+        return "A wrong_if condition fired", "against"
+    if counts.get("against") or counts.get("late"):
+        return "Under pressure", "late"
+    if last.get("needs_human"):
+        return "Needs your judgment", "warn"
+    if counts.get("seen"):
+        return "Holding so far", "seen"
+    return "Waiting for readings", "no_data"
+
+
+def _thesis_hero(record: dict) -> str:
+    harness = record.get("harness") if isinstance(record.get("harness"), dict) else {}
+    last = record.get("last_check") if isinstance(record.get("last_check"), dict) else None
+    status = ""
+    if last:
+        verdict, tone = _verdict(last)
+        counts = last.get("counts") or {}
+        parts = [f'{counts.get(k, 0)} {STATUS_TEXT[k]}' for k in ("seen", "against", "late", "no_data", "not_due") if counts.get(k)]
+        status = (f'<p><span class="verdict v-{_e(tone)}">{_e(verdict)}</span></p>'
+                  f'<p class="muted">Links: {_e(" · ".join(parts) or "none checked")}'
+                  f' · wrong_if fired: {_e(len(last.get("wrong_if_fired") or []))}'
+                  f' · next check {_e(last.get("next_due") or "—")}</p>')
+    else:
+        status = '<p class="muted">Not checked yet.</p>'
+    return (f'<section class="card hero"><p class="eyebrow">Your thesis · {_e(record.get("title"))}</p>'
+            f'<p class="hero-text">{_e(harness.get("hypothesis"))}</p>{status}</section>')
+
+
+def _change_pct(row: dict) -> float | None:
+    match = re.match(r"^([+-]\d+(?:\.\d+)?)%", str(row.get("change") or ""))
+    return float(match.group(1)) if match else None
+
+
+def _readings_hero(record: dict) -> str:
+    last = record.get("last_check") if isinstance(record.get("last_check"), dict) else None
+    rows = (last or {}).get("rows") or []
+    if not rows:
+        return ""
+    pcts = [(p, r) for r in rows if (p := _change_pct(r)) is not None]
+    up = sum(1 for p, _ in pcts if p > 0.5)
+    down = sum(1 for p, _ in pcts if p < -0.5)
+    flat = len(pcts) - up - down
+    withheld = sum(1 for r in rows if (r.get("latest") or {}).get("withheld"))
+    movers = sorted(pcts, key=lambda pr: abs(pr[0]), reverse=True)[:3]
+    items = "".join(f'<li>{_signal_tag(r)}{_e(_company(r))}: {_e(r.get("change"))}</li>' for _, r in movers)
+    return (f'<section class="card hero"><p class="eyebrow">What your readings show · {_e(record.get("title"))}</p>'
+            f'<p class="hero-text">{len(rows)} readings: {up} up, {down} down, {flat} flat against the period before'
+            + (f", {withheld} withheld" if withheld else "") + '.</p>'
+            + (f'<p class="muted small">Largest moves</p><ul class="movers">{items}</ul>' if items else "")
+            + '<p class="muted small">This describes the readings, not a view. Add your own thesis to have Hermes check it.</p>'
+            '</section>')
+
+
 THEME_LABELS = {"optical_cpo": "CPO and optical networking", "custom_asic": "Custom AI chips (ASIC)",
                 "space_infrastructure": "Space infrastructure", "physical_ai": "Physical AI", "other": "Other"}
 THEME_ORDER = ("optical_cpo", "custom_asic", "space_infrastructure", "physical_ai", "other")
@@ -214,7 +271,7 @@ def _theme_order(theme: str) -> int:
 
 
 def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: bool) -> str:
-    items = ['<p class="side-label">Workspace</p><nav>']
+    items = ['<p class="side-label">Workspace</p><nav><a href="#glance">At a glance</a>']
     if preview:
         items.append('<a href="#live">Live now</a>')
     if needs:
@@ -302,17 +359,32 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
         body.append('<h2 id="live">Live now</h2>' + card + actions)
         for row in preview.get("rows") or []:
             sources += [a for a in row.get("attribution") or [] if a not in sources]
-    if needs:
-        body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
-    # Themes in the main column, one section per sector (the earlier local-workspace layout).
     groups: dict[str, dict[str, list]] = {}
     for record in watchlists:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["watch"].append(record)
     for record in theses:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
+    heroes = [_thesis_hero(r) for r in theses[:3]] or [h for h in (_readings_hero(r) for r in watchlists[:2]) if h]
+    if heroes:
+        body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
+    pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
+    if preview and preview.get("theme") and preview["theme"] not in pack_themes:
+        pack_themes.insert(0, preview["theme"])
+    for theme in pack_themes[:3]:
+        page = SECTOR_PAGES.get(theme, SITE)
+        body.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack · {_e(_theme_label(theme))}</p>'
+                    f'<p>EquityLayer\'s own thesis for this sector, verified by its research team with the readings that '
+                    f'would prove it wrong, is in preparation. See the industry map and get notified when it is published.</p>'
+                    f'<p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
+    if needs:
+        body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
+    if groups:
+        body.append('<h2 class="section">Evidence</h2><p class="muted small">The readings behind it, by sector and '
+                    'supply-chain step.</p>')
+    # Themes in the main column, one section per sector (the earlier local-workspace layout).
     for theme in sorted(groups, key=_theme_order):
         group = groups[theme]
-        body.append(f'<h2 id="theme-{_e(theme)}">{_e(_theme_label(theme))}</h2>'
+        body.append(f'<h3 class="theme-h" id="theme-{_e(theme)}">{_e(_theme_label(theme))}</h3>'
                     + "".join(_watch_card(r) for r in group["watch"])
                     + "".join(_thesis_card(r) for r in group["theses"]))
     if event_items:
@@ -322,15 +394,6 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     if sources:
         body.append('<section class="card"><h2>Sources</h2><ul class="small">'
                     + "".join(f"<li>{_e(s)}</li>" for s in sources[:12]) + "</ul></section>")
-    themes = [t for t in sorted(groups, key=_theme_order) if t != "other"]
-    if preview and preview.get("theme") and preview["theme"] not in themes:
-        themes.insert(0, preview["theme"])
-    for theme in themes[:3]:
-        page = SECTOR_PAGES.get(theme, SITE)
-        body.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack</p>'
-                    f'<h3>{_e(_theme_label(theme))}</h3><p>EquityLayer\'s own thesis for this sector, verified by its research '
-                    f'team with the readings that would prove it wrong, is in preparation. See the industry map and get '
-                    f'notified when it is published.</p><p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
     body.append(f'<p class="muted small">Saved on this machine at <code>{_e(saved_at)}</code>. Reopen it any time with '
                 '<code>/el dashboard</code>, from Artifacts in Hermes Desktop, or in any browser.</p>' if saved_at else "")
     body.append('<footer class="muted small">Generated on this machine from your local files. EquityLayer reports '
@@ -374,7 +437,7 @@ border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 .actions{{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
-.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.go{{font-weight:600}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
+.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
 a{{color:var(--forest-2)}}footer{{margin-top:28px}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}
