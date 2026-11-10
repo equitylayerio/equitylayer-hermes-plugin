@@ -375,6 +375,15 @@ def format_check(result: dict) -> str:
     if result.get("status") == "error":
         return f"**`{follow_id}`:** check failed: {result.get('error')}. {result.get('message') or ''}".strip()
     review = result.get("needs_review")
+    name = result.get("title") or result.get("target_id")
+    if result.get("status") == "unavailable":
+        return _join(f"**EquityLayer Research Pack · {name}:** not published right now (since "
+                     f"{result.get('unavailable_since')}). EquityLayer may have withdrawn it or be replacing it, so it is "
+                     "not EquityLayer's current view. Its readings stay tracked. Hermes looks again on "
+                     f"{result.get('next_check_at')}; `/el remove {follow_id}` removes it from this machine.")
+    if result.get("available_again"):
+        return _join(f"**EquityLayer Research Pack · {name}:** published again.",
+                     f"Next check: {result['next_check_at']}" if result.get("next_check_at") else "")
     if result.get("title") and result.get("status") == "current":
         # The server's wording ("Keep this Follow Card") is for agents; say what it means.
         return _join(f"**EquityLayer Research Pack · {result['title']}:** current. None of the readings it "

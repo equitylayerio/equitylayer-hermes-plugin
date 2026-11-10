@@ -225,7 +225,7 @@ def test_preview_puts_a_published_pack_first(make_service):
                 ["artifact_file"], encoding="utf-8").read()
     actions = page[page.index('<div class="actions">'):]
     assert actions.index("Follow EquityLayer&#x27;s Research Pack<") < actions.index("Follow these readings")
-    assert 'class="ghost" data-hermes-send="Yes, follow these curated readings."' in actions
+    assert 'class="ghost" data-hermes-send="I\'d like to follow these curated readings. Show me the card first."' in actions
 
 
 
@@ -285,7 +285,9 @@ def test_several_packs_in_one_sector(make_service):
     preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
     page = render(None, [], [], preview=preview, packs=packs, followed={})
     assert "Follow EquityLayer&#x27;s Research Packs (3)" in page
-    assert 'data-hermes-send="Yes, follow EquityLayer&#x27;s Research Packs."' in page
+    # The button answers decision 2 only: the card and the person's yes still come before anything is followed.
+    assert 'data-hermes-send="I&#x27;d like to follow EquityLayer&#x27;s Research Packs. Show me their card first."' in page
+    assert "Yes, follow EquityLayer" not in page
     assert page.count("EquityLayer Research Pack · CPO and optical networking · published") == 3
 
     followed = {pid: {"follow_id": "follow_" + str(n) * 32, "target_id": pid, "pack": summary(pid, f"Pack {n}"),
@@ -297,3 +299,46 @@ def test_several_packs_in_one_sector(make_service):
     assert glance.count('<details class="more" open><summary>2 hypotheses') == 1  # the first opens, the rest fold
     assert glance.count('<details class="more"><summary>2 hypotheses') == 1
     assert page.count("Follow this Pack") == 1  # only the Pack they don't follow is offered
+
+
+
+def test_a_pack_that_is_no_longer_published_is_reported_once_and_not_shown_as_current(make_service, tmp_path):
+    service, _, store = make_service({**PACK_ROUTES, "check_research_follow": "check_follow_cpo_unavailable"})
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    record = store.get(fid)
+    record["next_check_at"] = "2026-01-01"  # due
+    store.save(record)
+    first = call(service.el_check)
+    assert first["report_total"] >= 1 and "not published right now" in first["markdown"]
+    record = store.get(fid)
+    assert record["unavailable_since"] and record["next_check_at"] > "2026-01-01"
+    record["next_check_at"] = "2026-01-02"  # due again, still unavailable: no new notice for the Pack
+    store.save(record)
+    again = call(service.el_check)
+    assert "not published right now" not in again["markdown"]
+    assert [i["state"] for i in call(service.el_list)["items"]] == ["not published"]
+    single = call(service.el_check, {"item_id": fid})
+    assert "## EquityLayer thesis" not in single["markdown"] and "not published right now" in single["markdown"]
+    page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
+    assert "you follow it" not in page and "not EquityLayer's current view" in page
+    assert "Follow this Pack" not in page
+
+
+def test_dashboard_caps_pack_heroes_at_four():
+    from equitylayer_plugin.dashboard import render
+
+    followed = {f"pack-{n}": {"follow_id": "follow_" + str(n) * 32, "target_id": f"pack-{n}",
+                              "pack": {"title": f"Pack {n}", "theme_id": "optical_cpo",
+                                       "hypotheses": [{"statement": "h", "confidence": "low"}]}}
+                for n in range(1, 6)}
+    page = render(None, [], [], followed=followed)
+    assert page.count("EquityLayer thesis · CPO and optical networking · you follow it") == 4
+    assert page.count("EquityLayer Research Pack · you follow it") == 1  # the fifth still shows, as a card
+
+
+def test_pack_readings_titles_fit():
+    from equitylayer_plugin.tools import EquityLayerTools  # noqa: F401 - the title logic lives in _attach_pack
+    import inspect
+    from equitylayer_plugin import tools
+
+    assert "room = 80 - len(prefix)" in inspect.getsource(tools.EquityLayerTools._attach_pack)

@@ -405,10 +405,13 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         variables = summary.get("variables") or []
         if variables and not record.get("readings_id"):
             theme = summary.get("theme_id") if summary.get("theme_id") in dashboard_page.THEME_LABELS else None
+            prefix = f"{PACK_SHORT.get(theme, 'Research')} Pack readings: "
             name = " ".join(str(summary.get("title") or "").split())
-            name = name if len(name) <= 62 else name[:61].rsplit(" ", 1)[0] + "…"
-            title = f"{PACK_SHORT.get(theme, 'Research')} Pack readings: {name}" if name else \
-                f"{PACK_SHORT.get(theme, 'Research')} Pack: the readings it watches"
+            room = 80 - len(prefix)
+            if len(name) > room:
+                cut = name[: room - 1]
+                name = (cut.rsplit(" ", 1)[0] if " " in cut[room // 2:] else cut) + "…"
+            title = prefix + name if name else f"{PACK_SHORT.get(theme, 'Research')} Pack: the readings it watches"
             watch_id = self._unique_item_id(title)
             try:
                 saved = self._watch_save({"_new_id": watch_id, "title": title, "variables": variables,
@@ -511,6 +514,23 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         if isinstance(record.get("pack"), dict):
             result["title"] = record["pack"].get("title")
             result["linked"] = bool(record.get("readings_id"))
+        if result["status"] == "unavailable":
+            # EquityLayer withdrew it or is replacing it. Say so once, then look again weekly.
+            from datetime import date, timedelta
+            from .harness_store import today_taipei
+
+            today = today_taipei()
+            result["unavailable_first"] = not record.get("unavailable_since")
+            result["unavailable_since"] = record.get("unavailable_since") or today
+            record["unavailable_since"] = result["unavailable_since"]
+            record["next_check_at"] = (date.fromisoformat(today) + timedelta(days=7)).isoformat()
+            result["next_check_at"] = record["next_check_at"]
+            result["needs_review"] = False
+            store.save(record)
+            return result
+        if record.get("unavailable_since"):
+            record["unavailable_since"] = None
+            result["available_again"] = True
         current = (record.get("pack") or {}).get("revision") or (record.get("follow_card") or {}).get("version")
         upcoming = result.get("new_version") or (result.get("next_card") or {}).get("version")
         # New data for a watched reading keeps the revision; a new revision is EquityLayer changing the Pack.
@@ -540,6 +560,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             "checked": public,
             "errors": sum(1 for r in public if r.get("status") == "error"),
             "needs_review": sum(1 for r in public if r.get("needs_review")),
+            "unavailable_new": sum(1 for r in public if r.get("unavailable_first") or r.get("available_again")),
             "awaiting_review": [
                 {"follow_id": r.get("follow_id"), "target_id": r.get("target_id")} for r in awaiting
             ],

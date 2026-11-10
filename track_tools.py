@@ -208,7 +208,8 @@ class TrackTools:
             return 1, [], f"Could not check your {kind}: {part.get('error')}. It will be tried again."
         if kind == "followed Research Packs":
             pending = [a.get("follow_id") for a in part.get("awaiting_review") or [] if isinstance(a, dict)]
-            count = (part.get("needs_review") or 0) + len(pending) + (part.get("errors") or 0)
+            count = ((part.get("needs_review") or 0) + len(pending) + (part.get("errors") or 0)
+                     + (part.get("unavailable_new") or 0))
             return count, [p for p in pending if p], str(part.get("markdown") or "")
         count = (part.get("report_total") or 0) + (part.get("errors") or 0)
         return count, list(part.get("awaiting_read") or []), str(part.get("markdown") or "")
@@ -245,7 +246,9 @@ class TrackTools:
             if (count or item_id) and markdown:
                 blocks.append(markdown)
         self._refresh_dashboard()
-        summary = (parts.get("follow") or {}).get("pack") if item_id else None
+        follow_now = self._safe_get(self._store_factory().get, self._part_id(parts, "follow", item_id)) \
+            if item_id and "follow" in parts else None
+        summary = (follow_now or {}).get("pack") if not (follow_now or {}).get("unavailable_since") else None
         if isinstance(summary, dict):
             blocks.insert(0, formatters.format_pack_thesis(summary))
         if not calls:
@@ -342,7 +345,8 @@ class TrackTools:
         for r in follows:
             readings = watch_by_id.pop(r.get("readings_id"), None) if r.get("readings_id") else None
             unread = bool(readings and isinstance(readings.get("pending"), dict))
-            state = "update to review" if r.get("pending_review") else ("unread" if unread else "following")
+            state = ("not published" if r.get("unavailable_since") else "update to review" if r.get("pending_review")
+                     else ("unread" if unread else "following"))
             items.append({"id": r.get("follow_id"), "title": (r.get("pack") or {}).get("title") or r.get("target_id"),
                           "level": PACK + (" + readings" if readings else ""),
                           "last_check": r.get("last_checked_at") or "never", "state": state})

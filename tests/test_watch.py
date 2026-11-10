@@ -146,7 +146,8 @@ def test_dashboard_preview_shows_live_readings_without_saving(make_service, tmp_
     result = json.loads(service.el_dashboard_render({"preview_variables": [FOCI], "preview_title": "CPO live readings"}))
     page = open(result["artifact_file"], encoding="utf-8").read()
     assert "Live now" in page and "CPO live readings" in page and "preview, not saved" in page
-    assert 'data-hermes-send="Yes, follow these curated readings."' in page and "<script" not in page
+    assert 'data-hermes-send="I\'d like to follow these curated readings. Show me the card first."' in page
+    assert "<script" not in page
     assert "224,257" in page and "Open Government Data License" in page
     assert not (tmp_path / "watchlists").exists() and not (tmp_path / "profile.json").exists()
     assert transport.names() == ["get_variable", "list_registry"]
