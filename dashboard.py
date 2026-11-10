@@ -227,7 +227,7 @@ def _thesis_hero(record: dict) -> str:
             f'<p class="hero-text">{_e(harness.get("hypothesis"))}</p>{status}</section>')
 
 
-def _pack_hero(record: dict) -> str:
+def _pack_hero(record: dict, compact: bool = False, open_: bool = True) -> str:
     """A followed Pack at the top: EquityLayer's thesis, what would prove each part wrong, and when it is checked."""
     summary = record.get("pack") if isinstance(record.get("pack"), dict) else {}
     label = THEME_LABELS.get(summary.get("theme_id")) if summary.get("theme_id") in THEME_LABELS else None
@@ -252,7 +252,9 @@ def _pack_hero(record: dict) -> str:
     return (f'<section class="card hero pack"><p class="eyebrow">EquityLayer thesis' + (f" · {_e(label)}" if label else "")
             + f' · you follow it</p><h3>{_e(summary.get("title"))}</h3>'
             + (f'<p class="hero-text pack-view">{_e(summary.get("view"))}</p>' if summary.get("view") else "")
-            + (f'<ol class="hyp">{items}</ol>' if items else "") + status + link + "</section>")
+            + ((f'<details class="more"{" open" if open_ else ""}><summary>{len(summary.get("hypotheses") or [])} '
+                f'hypotheses and what would prove each wrong</summary><ol class="hyp">{items}</ol></details>'
+                if compact else f'<ol class="hyp">{items}</ol>') if items else "") + status + link + "</section>")
 
 
 def _change_pct(row: dict) -> float | None:
@@ -377,7 +379,7 @@ def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str,
         mine_followed = [p for p in mine if p["id"] in followed and p["id"] not in shown]
         published = [p for p in mine if p["id"] not in followed and p.get("status") == "verified"
                      and p.get("access") == "public" and _pack_id(p.get("id"))]
-        for p in (mine_followed + published)[:2]:
+        for p in (mine_followed + published)[:4]:
             shown.add(p["id"])
             cards.append(_pack_card(p, label, followed.get(p["id"]), as_of))
         if heroes or mine_followed or published:
@@ -496,13 +498,18 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                             "last_check": {"as_of": preview.get("as_of"), "rows": preview.get("rows") or [],
                                            "new_count": None, "next_due": "after you save"}})
         card = re.sub(r'<span class="tag[^"]*">[^<]*</span>', '<span class="tag">preview, not saved</span>', card, count=1)
-        pack = next((p for p in packs or [] if isinstance(p, dict) and p.get("kind") == "pack"
-                     and p.get("theme_id") == preview.get("theme") and p.get("status") == "verified"
-                     and p.get("access") == "public" and _pack_id(p.get("id")) and p.get("id") not in followed), None)
+        open_packs = [p for p in packs or [] if isinstance(p, dict) and p.get("kind") == "pack"
+                      and p.get("theme_id") == preview.get("theme") and p.get("status") == "verified"
+                      and p.get("access") == "public" and _pack_id(p.get("id")) and p.get("id") not in followed]
+        pack = open_packs[0] if open_packs else None
+        follow_label = ("Follow EquityLayer's Research Pack" if len(open_packs) == 1
+                        else f"Follow EquityLayer's Research Packs ({len(open_packs)})")
+        follow_send = ("Yes, follow EquityLayer's Research Pack." if len(open_packs) == 1
+                       else "Yes, follow EquityLayer's Research Packs.")
         readings_class = ' class="ghost"' if pack else ""
         actions = ('<div class="actions">'
-                   + ('<button type="button" data-hermes-send="Yes, follow EquityLayer\'s Research Pack.">'
-                      "Follow EquityLayer's Research Pack</button>" if pack else "")
+                   + (f'<button type="button" data-hermes-send="{_e(follow_send)}">{_e(follow_label)}</button>'
+                      if pack else "")
                    + f'<button type="button"{readings_class} data-hermes-send="Yes, follow these curated readings.">'
                    'Follow these readings</button>'
                    '<button type="button" class="ghost" data-hermes-send="I have my own view.">I have my own view</button>'
@@ -515,17 +522,19 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["watch"].append(record)
     for record in theses:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
-    pack_heroes = {pid: _pack_hero(r) for pid, r in followed.items() if isinstance(r.get("pack"), dict)}
+    hero_records = [(pid, r) for pid, r in followed.items() if isinstance(r.get("pack"), dict)][:4]
+    several = len(hero_records) > 1
+    pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0) for n, (pid, r) in enumerate(hero_records)}
     hero_follows = {r.get("follow_id") for r in followed.values() if isinstance(r.get("pack"), dict)}
     own = [_thesis_hero(r) for r in theses[:3]] or [
         h for h in (_readings_hero(r, r.get("follow_id") in hero_follows) for r in watchlists[:2]) if h]
-    heroes = list(pack_heroes.values())[:2] + own
+    heroes = list(pack_heroes.values()) + own
     if heroes:
         body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
-    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(list(pack_heroes)[:2]))
+    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(pack_heroes))
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:

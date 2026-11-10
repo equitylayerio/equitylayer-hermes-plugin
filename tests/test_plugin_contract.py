@@ -98,9 +98,9 @@ def test_start_skill_offers_the_websites_sectors_in_order():
     assert [s["id"] for s in SECTORS if s["recommended"]] == ["optical_cpo"]
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
     for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
-                   "el_profile", "Follow EquityLayer's Research Pack (recommended)",
+                   "el_profile", "Follow EquityLayer's Research Packs (recommended)",
+                   "call `el_track` with each chosen `pack_id`, one call per Pack",
                    "1. Follow the curated readings (recommended)",
-                   "On yes, call `el_track` with the `pack_id`",
                    "On yes, call `el_track` with the title", "On yes, call `el_track` with the harness",
                    "el_dashboard_render", "call `el_track` with that `item_id` and the harness",
                    "Before decision 2, show what is live"):

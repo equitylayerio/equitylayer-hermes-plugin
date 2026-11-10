@@ -405,7 +405,10 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         variables = summary.get("variables") or []
         if variables and not record.get("readings_id"):
             theme = summary.get("theme_id") if summary.get("theme_id") in dashboard_page.THEME_LABELS else None
-            title = f"{PACK_SHORT.get(theme, 'Research')} Pack: the readings it watches"
+            name = " ".join(str(summary.get("title") or "").split())
+            name = name if len(name) <= 62 else name[:61].rsplit(" ", 1)[0] + "…"
+            title = f"{PACK_SHORT.get(theme, 'Research')} Pack readings: {name}" if name else \
+                f"{PACK_SHORT.get(theme, 'Research')} Pack: the readings it watches"
             watch_id = self._unique_item_id(title)
             try:
                 saved = self._watch_save({"_new_id": watch_id, "title": title, "variables": variables,

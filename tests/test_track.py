@@ -180,7 +180,7 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
     readings_id = record["readings_id"]
     watch = json.loads((tmp_path / "watchlists" / f"{readings_id}.json").read_text())
     assert watch["follow_id"] == fid and watch["theme"] == "optical_cpo"
-    assert watch["title"] == "CPO Pack: the readings it watches"
+    assert watch["title"] == "CPO Pack readings: What Taiwan's optical suppliers report, and what they only…"
     assert [(i["id"], i["level"]) for i in call(service.el_list)["items"]] == [(fid, "EquityLayer thesis + readings")]
 
     check = call(service.el_check, {"item_id": fid})
@@ -196,7 +196,7 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
     assert "EquityLayer thesis · CPO and optical networking · you follow it" in glance
     assert "Would be wrong if:" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
-    assert "CPO Pack: the readings it watches" in page[page.index("Evidence"):]
+    assert "CPO Pack readings: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
 
     assert _remove_item(service, {"item_id": fid})["ok"]
     assert store.get(fid) is None and not (tmp_path / "watchlists" / f"{readings_id}.json").exists()
@@ -224,7 +224,7 @@ def test_preview_puts_a_published_pack_first(make_service):
     page = open(call(service.el_dashboard_render, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
                 ["artifact_file"], encoding="utf-8").read()
     actions = page[page.index('<div class="actions">'):]
-    assert actions.index("Follow EquityLayer's Research Pack") < actions.index("Follow these readings")
+    assert actions.index("Follow EquityLayer&#x27;s Research Pack<") < actions.index("Follow these readings")
     assert 'class="ghost" data-hermes-send="Yes, follow these curated readings."' in actions
 
 
@@ -268,3 +268,32 @@ def test_a_follow_with_nothing_waiting_is_not_an_error(make_service):
     fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
     seen = call(service.el_seen, {"item_id": fid})
     assert seen["ok"] and "no update waiting" in seen["markdown"]
+
+
+
+def test_several_packs_in_one_sector(make_service):
+    from equitylayer_plugin.dashboard import render
+
+    def summary(pid, title):
+        return {"pack_id": pid, "title": title, "view": f"View of {title}.", "theme_id": "optical_cpo",
+                "url": f"https://equitylayer.io/research/packs/{pid}",
+                "hypotheses": [{"statement": f"{title} H{n}", "confidence": "low", "falsifier": "x", "due": "2027-01-10"}
+                               for n in (1, 2)]}
+
+    packs = [{"id": pid, "kind": "pack", "title": pid, "theme_id": "optical_cpo", "status": "verified",
+              "access": "public"} for pid in ("cpo-timing-and-form", "cpo-laser-inp-test-bottleneck", "taiwan-x")]
+    preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
+    page = render(None, [], [], preview=preview, packs=packs, followed={})
+    assert "Follow EquityLayer&#x27;s Research Packs (3)" in page
+    assert 'data-hermes-send="Yes, follow EquityLayer&#x27;s Research Packs."' in page
+    assert page.count("EquityLayer Research Pack · CPO and optical networking · published") == 3
+
+    followed = {pid: {"follow_id": "follow_" + str(n) * 32, "target_id": pid, "pack": summary(pid, f"Pack {n}"),
+                      "next_check_at": "2026-11-12"}
+                for n, pid in enumerate(("cpo-timing-and-form", "cpo-laser-inp-test-bottleneck"), 1)}
+    page = render(None, [], [], packs=packs, followed=followed)
+    glance = page[page.index("At a glance"):]
+    assert glance.count("EquityLayer thesis · CPO and optical networking · you follow it") == 2
+    assert glance.count('<details class="more" open><summary>2 hypotheses') == 1  # the first opens, the rest fold
+    assert glance.count('<details class="more"><summary>2 hypotheses') == 1
+    assert page.count("Follow this Pack") == 1  # only the Pack they don't follow is offered

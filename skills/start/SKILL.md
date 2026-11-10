@@ -18,7 +18,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 - **Introduce EquityLayer as you go,** in at most three short sentences across the whole setup, each where it fits, plain and with no superlatives:
   - before decision 1: EquityLayer makes your agent better at equity research: it checks company filings and exchange open data instead of guessing;
   - with the live readings: every reading carries its source and what it cannot show, gaps are named instead of filled, and everything you track stays on this machine;
-  - in the close, about EquityLayer's own Research Pack for their sector (a thesis whose sources its research team checks, with what would prove it wrong), going by the registry you listed: if they follow it, say when its next check is; if one is published and they don't follow it, say so and that they can follow it from the dashboard; if one is in review, say it is not published yet; if there is none, say that when EquityLayer publishes one it shows up in this setup first, and that the industry map on equitylayer.io shows which segments EquityLayer tracks (the dashboard has the link).
+  - in the close, about EquityLayer's own Research Packs for their sector (a thesis whose sources its research team checks, with what would prove it wrong), going by the registry you listed: if they follow them, say when the next check is; if some are published and they don't follow them, say so and that they can follow it from the dashboard; if one is in review, say it is not published yet; if there is none, say that when EquityLayer publishes one it shows up in this setup first, and that the industry map on equitylayer.io shows which segments EquityLayer tracks (the dashboard has the link).
 - **Never say what to buy, sell, size or time.** Never write a view for the person, and never present a view as EquityLayer's unless it is a published Research Pack.
 
 ## Before the first question
@@ -30,7 +30,7 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
   3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings stay under the same id and become the thesis's evidence.
   4. Add a sector.
   Skip any decision already answered.
-- If the registry lists a Research Pack, note it inside the matching sector option, so decision 1 keeps four options: a published one as "CPO and optical networking: EquityLayer Pack available"; one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector whose Pack is published, decision 2 gets it as option 1 (see there). An in-review Pack cannot be read or followed yet; say so and go on.
+- If the registry lists Research Packs, note them inside the matching sector option, so decision 1 keeps four options: published ones as "CPO and optical networking: EquityLayer Packs available (2)" (or "Pack available" for one); one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector with published Packs, decision 2 gets them as option 1 (see there). An in-review Pack cannot be read or followed yet; say so and go on.
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
@@ -57,8 +57,8 @@ Save the sector to the profile either way, so a later visit can check again.
 
 Offer exactly one of these two lists, with one option marked recommended.
 
-**When EquityLayer has published a Research Pack for the sector:**
-1. Follow EquityLayer's Research Pack (recommended)
+**When EquityLayer has published Research Packs for the sector:**
+1. Follow EquityLayer's Research Packs (recommended)
 2. Follow the curated readings
 3. I have a view
 4. Help me form a view
@@ -69,7 +69,7 @@ Offer exactly one of these two lists, with one option marked recommended.
 3. Help me form a view
 
 What each option means:
-- **Follow EquityLayer's Research Pack:** its title, in one line. Reason: it is EquityLayer's own thesis for the sector, so they start from a worked-out view, each hypothesis with what would prove it wrong and the readings it watches. Say plainly that "verified" means its sources and claims were checked, not that the thesis is right, and give its hypotheses' confidence.
+- **Follow EquityLayer's Research Packs:** how many, and each title in one line. Reason: they are EquityLayer's own theses for the sector, so they start from a worked-out view, each hypothesis with what would prove it wrong and the readings it watches. Say plainly that "verified" means its sources and claims were checked, not that the thesis is right, and give its hypotheses' confidence.
 - **Follow the curated readings.** No view needed. I tell you what moved at each check, and you can add a view later.
 - **I have a view.** They write it in one sentence in their own words.
 - **Help me form a view.** Ask up to three short questions, one per message:
@@ -82,11 +82,12 @@ A view takes a stand and could be wrong.
 
 ## Decision 3. One card to approve
 
-**For a Research Pack:** call `el_research_pack` (action `read`, its `pack_id`). Show one card, not the whole Pack:
-- its title and view, in one or two sentences;
+**For EquityLayer's Research Packs:** call `el_research_pack` (action `read`) for each published Pack of the sector. Show one card, not the whole Packs. For each Pack:
+- its title and view, in one sentence;
 - each hypothesis in one plain line, with its confidence, what would prove it wrong and by when;
-- the readings it watches, and one line on what it does not cover.
-Ask them to reply "yes" or ask about it. On yes, call `el_track` with the `pack_id`. It follows the Pack and the readings it watches as one item, with one `item_id`.
+- the readings it watches.
+Then one line on what they do not cover. Keep the card short: with more than six hypotheses in all, give each one in a few words and say the dashboard has the rest.
+Ask them to reply "yes" to follow all of them, name the ones they want, or ask about them. On yes, call `el_track` with each chosen `pack_id`, one call per Pack. Each Pack and the readings it watches become one item with its own `item_id`.
 
 **For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), and mix categories: at least one demand reading, one capacity reading (capex) and one pricing reading (gross margin) when the plan has them, plus Taiwan monthly revenue. One line each: latest level, what it tells about the sector (in one plain clause), and its caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_track` with the title, the variable ids and the theme.
 
