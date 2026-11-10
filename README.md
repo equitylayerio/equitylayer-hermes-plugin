@@ -1,18 +1,19 @@
 # EquityLayer for Hermes Agent
 
-**Research CPO or space infrastructure with your own AI. EquityLayer gives Hermes the tracked variables, source rules and caveats; you write the thesis; Hermes checks it every day and tells you what moved, what is late and what needs you. It never tells you what to trade.**
+**Research CPO, custom AI chips or space infrastructure with your own AI. EquityLayer gives Hermes the tracked variables, source rules and caveats; you write the thesis; Hermes checks it every day and tells you what moved, what is late and what needs you. It never tells you what to trade.**
 
 Ask an AI whether co-packaged optics is really shipping, or whether launch backlogs are turning into revenue, and you usually get a confident summary with no dates, no sources and no way to tell later whether it still holds. This plugin turns your own view into something Hermes can check against official readings: issuer filings, exchange open data and company statements, each with its period, its source and what it cannot show.
 
 You state a thesis in your own words. EquityLayer's public MCP maps it to a catalog of tracked variables (shipments, segment revenue, orders, capex, issuer statements) with caveats and coverage gaps. You and Hermes write the four parts: **hypothesis, why, tracking, wrong_if**. The plugin stores that harness and its baseline on your machine, and a daily Hermes job checks it against the latest readings. EquityLayer stores neither the thesis nor the harness.
 
-**Coverage today (2026-11-09):**
+**Coverage today (2026-11-10):**
 
 | Theme | What you can track |
 | --- | --- |
 | CPO and optical networking | Live now: 28 variables across Taiwan, US and Japan suppliers (revenue, segments, capex, issuer statements). |
+| Custom AI chips (ASIC) | Live now: design-service and foundry suppliers' monthly revenue and filings (Taiwan open data, SEC). |
 | Space infrastructure | Being added: launch and satellite variables are in review and not in the live catalog yet. Until they land, a space thesis mostly shows gaps. |
-| Physical AI | Coverage planned. |
+| Physical AI | Variables listed, most readings withheld while source rights are reviewed. |
 
 The plugin says which readings are missing or withheld instead of guessing.
 

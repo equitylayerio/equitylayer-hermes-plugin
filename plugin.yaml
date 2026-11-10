@@ -3,7 +3,7 @@ version: "0.4.0"
 manifest_version: 2
 api_version: 1
 description: >
-  Research CPO or space infrastructure with your own AI. Type /equitylayer:start and Hermes
+  Research CPO, custom AI chips or space infrastructure with your own AI. Type /equitylayer:start and Hermes
   guides you in four decisions: sector, how to follow it (curated readings or your own
   view), one card to approve, and how often to check. A local dashboard shows it all.
   EquityLayer's MCP maps your thesis to tracked variables with caveats and gaps; you
