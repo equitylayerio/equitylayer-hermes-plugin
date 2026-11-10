@@ -109,7 +109,7 @@ def test_start_skill_defaults_to_english_and_introduces_equitylayer_briefly():
     assert "**Use English** unless the person writes to you in another language" in text
     assert "or the device's language does not set it" in text
     assert "in at most three short sentences across the whole setup" in text
-    assert "EquityLayer is the fundamental research layer for AI agents" in text
+    assert "EquityLayer makes your agent better at equity research" in text
     assert "no superlatives" in text
 
 
