@@ -74,3 +74,14 @@ def test_pack_format_v1_shows_view_hypotheses_and_sources():
     assert "LandMark, a laser epi supplier" in text and "Would be wrong if:" in text and "`v:3081.two.revenue.monthly`" in text
     assert "(management claim)" in text and "Not covered" in text and "Cite as:" in text
     assert "sha256:" not in text.split("## Evidence")[0] and "https://" not in text
+
+
+
+def test_pack_format_v1_survives_odd_provenance_and_many_sources():
+    from equitylayer_plugin.formatters import format_pack
+
+    pack = {"view": "A view.", "claims": [{"assertion": {"statement": "S", "kind": "reported_fact"}, "provenance": "x"},
+                                          {"assertion": {"statement": "T"}, "provenance": {"source_ids": [None, "S1", 2]}}],
+            "sources": [{"id": f"S{i}", "publisher": "P"} for i in range(15)]}
+    text = format_pack(pack)
+    assert "(reported fact) S" in text and "[S1, 2]" in text and "…and 3 more on the Pack page." in text

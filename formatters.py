@@ -119,13 +119,17 @@ def _format_pack_v1(pack: dict) -> str:
     claims, all_claims = [], [c for c in pack.get("claims") or [] if isinstance(c, dict)]
     for c in all_claims[:8]:
         a = c.get("assertion") if isinstance(c.get("assertion"), dict) else {}
-        ids = ", ".join((c.get("provenance") or {}).get("source_ids") or [])
+        prov = c.get("provenance") if isinstance(c.get("provenance"), dict) else {}
+        ids = ", ".join(str(i) for i in prov.get("source_ids") or [] if isinstance(i, (str, int)))
         claims.append(f"- ({label.get(a.get('kind'), a.get('kind') or 'claim')}) {_clip(a.get('statement'), 260)}"
                       + (f" [{ids}]" if ids else ""))
     if len(all_claims) > 8:
         claims.append(f"- …and {len(all_claims) - 8} more on the Pack page.")
+    all_sources = [s for s in pack.get("sources") or [] if isinstance(s, dict)]
     sources = [f"- {s.get('id')}: {s.get('publisher') or ''}" + (f" ({_domain(s.get('url'))})" if _domain(s.get("url")) else "")
-               for s in pack.get("sources") or [] if isinstance(s, dict)][:12]
+               for s in all_sources[:12]]
+    if len(all_sources) > 12:
+        sources.append(f"- …and {len(all_sources) - 12} more on the Pack page.")
     return _join(
         f"## {cite.get('title') or pack.get('title') or pack.get('pack_id')}",
         " · ".join(m for m in meta if m),

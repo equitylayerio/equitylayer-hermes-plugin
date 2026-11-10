@@ -5,11 +5,14 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import os
+import tempfile
 import time
+from datetime import datetime
 from typing import Any, Callable
 
 from . import formatters
-from .harness_store import HarnessStore, default_harness_store
+from .harness_store import TAIPEI, HarnessStore, default_harness_store
 from .profile_store import SECTORS, ProfileStore, default_profile_store, describe, validate_fields
 from .watch_store import WatchStore, default_watch_store
 from .watch_tools import WatchTools
@@ -159,8 +162,11 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         follows, _ = self._store_factory().all()
         followed = {f.get("target_id"): f for f in follows if f.get("target_kind") == "pack" and f.get("target_id")}
         target = self._dashboard_root() / dashboard_page.FILE_NAME
+        packs, fetched_at = self._pack_index(refresh_packs)
+        as_of = (datetime.fromtimestamp(fetched_at, TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
+                 if fetched_at else None)
         page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview,
-                                     saved_at=str(target), packs=self._pack_index(refresh_packs), followed=followed)
+                                     saved_at=str(target), packs=packs, followed=followed, packs_as_of=as_of)
         return dashboard_page.write(self._dashboard_root(), page)
 
     # The last registry this plugin saw, so the dashboard can say which Research Packs are published.
@@ -171,26 +177,37 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
                 for e in entries or [] if isinstance(e, dict) and e.get("id")]
         path = self._dashboard_root() / PACK_INDEX
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"fetched_at": time.time(), "entries": rows}, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(path)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump({"fetched_at": time.time(), "entries": rows}, handle, ensure_ascii=False)
+            os.replace(tmp, path)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
         return rows
 
-    def _pack_index(self, refresh: bool = False) -> list[dict] | None:
+    def _pack_index(self, refresh: bool = False) -> tuple[list[dict] | None, float | None]:
+        """The cached registry and when it was fetched. Only an explicit dashboard render refreshes it (12 h);
+        renders after a check use the cache, and the card says how old it is."""
         try:
             data = json.loads((self._dashboard_root() / PACK_INDEX).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             data = None
         rows = data.get("entries") if isinstance(data, dict) and isinstance(data.get("entries"), list) else None
-        stale = rows is None or time.time() - float(data.get("fetched_at") or 0) > PACK_INDEX_MAX_AGE
-        if refresh and stale:
+        try:
+            fetched_at = float(data.get("fetched_at")) if rows is not None else None
+        except (TypeError, ValueError):
+            rows, fetched_at = None, None
+        if refresh and (fetched_at is None or time.time() - fetched_at > PACK_INDEX_MAX_AGE):
             try:
                 url = str(self._get_config("mcp_url", default=DEFAULT_MCP_URL) or DEFAULT_MCP_URL)
                 payload = McpClient(url, transport=self._transport, timeout=8.0).call_tool("list_registry", {})
-                rows = self._save_pack_index(payload.get("entries"))
+                rows, fetched_at = self._save_pack_index(payload.get("entries")), time.time()
             except Exception:  # noqa: BLE001 - the dashboard renders from the last registry it saw
                 logger.info("EquityLayer registry not refreshed for the dashboard", exc_info=True)
-        return rows
+        return rows, fetched_at
 
     def _preview(self, args: dict) -> dict | None:
         """Live readings shown before anything is saved, so the dashboard has something on the first turn."""

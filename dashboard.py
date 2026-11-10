@@ -306,76 +306,105 @@ def _clip(text: Any, limit: int = 280) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _pack_url(entry: dict) -> str:
-    return _https(entry.get("url")) or PACK_PAGE + str(entry.get("id"))
+PACK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,99}$")
 
 
-def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str, dict]) -> list[str]:
-    """One card per sector: the published EquityLayer Research Pack, whether the user follows it, or where it stands.
+def _pack_id(value: Any) -> str | None:
+    """Registry ids go into a chat message and a URL, so only plain slugs are used."""
+    return value if isinstance(value, str) and PACK_ID.match(value) else None
 
-    `packs` is the last registry the plugin saw (None when it has never seen one), so the card never claims a Pack
-    is missing or in preparation without having looked.
+
+def _pack_url(entry: dict) -> str | None:
+    pid = _pack_id(entry.get("id"))
+    return _https(entry.get("url")) or (PACK_PAGE + pid if pid else None)
+
+
+def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str, dict],
+                packs_as_of: str | None = None) -> list[str]:
+    """One card per sector: a Pack the user follows, a published Pack they can follow, or where the sector stands.
+
+    `packs` is the last registry the plugin saw (None when it has never seen one). A sector with no listed Pack only
+    says that none is published; whether one is coming is the sector page's to say.
     """
     cards, shown = [], set()
-    entries = [p for p in packs or [] if isinstance(p, dict) and p.get("kind") == "pack" and p.get("id")]
+    entries, seen_ids = [], set()
+    for p in packs or []:
+        if isinstance(p, dict) and p.get("kind") == "pack" and p.get("id") and p["id"] not in seen_ids:
+            seen_ids.add(p["id"])
+            entries.append(p)
     for pid in followed:
-        if pid not in {p["id"] for p in entries}:
-            entries.append({"id": pid, "kind": "pack", "title": pid, "theme_id": None, "status": "verified",
-                            "access": "public"})
-    followed_themes = [p.get("theme_id") for p in entries if p["id"] in followed and p.get("theme_id")]
-    for theme in themes + [t for t in followed_themes if t not in themes]:
+        if pid not in seen_ids:
+            entries.append({"id": pid, "kind": "pack", "title": pid, "theme_id": None})
+    ordered = list(dict.fromkeys(themes + [p.get("theme_id") for p in entries
+                                           if p["id"] in followed and p.get("theme_id")]))
+    as_of = f"Registry as of {packs_as_of}." if packs_as_of else ""
+    for theme in ordered:
         mine = [p for p in entries if p.get("theme_id") == theme]
         label = _theme_label(theme)
         page = SECTOR_PAGES.get(theme, SITE)
-        published = [p for p in mine if p.get("status") == "verified" and p.get("access") == "public"]
-        for p in published[:2]:
+        mine_followed = [p for p in mine if p["id"] in followed]
+        published = [p for p in mine if p["id"] not in followed and p.get("status") == "verified"
+                     and p.get("access") == "public" and _pack_id(p.get("id"))]
+        for p in (mine_followed + published)[:2]:
             shown.add(p["id"])
-            cards.append(_pack_card(p, label, followed.get(p["id"])))
-        if published:
+            cards.append(_pack_card(p, label, followed.get(p["id"]), as_of))
+        if mine_followed or published:
             continue
+        restricted = [p for p in mine if p.get("status") == "verified" and p.get("access") != "public"]
         review = [p for p in mine if p.get("status") == "in_review"]
-        if review:
+        if restricted:
+            text = (f'{_e(restricted[0].get("title"))} is published with restricted access. This plugin reads public '
+                    'Packs only.')
+        elif review:
             text = (f'{_e(review[0].get("title"))} is in review, not published yet. It can be read and followed '
                     'once it is published.')
         elif packs is not None:
-            text = ("EquityLayer's own thesis for this sector, verified by its research team with the readings that "
-                    "would prove it wrong, is in preparation. See the industry map and get notified when it is "
-                    "published.")
+            text = ("EquityLayer has not published a Research Pack for this sector. Its industry map shows which "
+                    "segments it tracks and where a Pack stands.")
         else:
             text = ("EquityLayer's research for this sector is on equitylayer.io: the industry map, the segments it "
                     "tracks and any published Research Pack.")
         cards.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack · {_e(label)}</p>'
-                     f'<p>{text}</p><p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
+                     f'<p>{text}</p>' + (f'<p class="muted small">{_e(as_of)}</p>' if as_of and packs is not None else "")
+                     + f'<p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
     for p in entries:
         if p["id"] in followed and p["id"] not in shown:
-            cards.append(_pack_card(p, None, followed[p["id"]]))
+            shown.add(p["id"])
+            cards.append(_pack_card(p, None, followed[p["id"]], as_of))
     return cards
 
 
-def _pack_card(entry: dict, label: str | None, follow: dict | None) -> str:
-    state = "you follow it" if follow else "published"
+def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str = "") -> str:
+    state = "you follow it" if follow is not None else "published"
     eyebrow = "EquityLayer Research Pack" + (f" · {label}" if label else "") + f" · {state}"
     parts = [f'<section class="card pack"><p class="eyebrow">{_e(eyebrow)}</p>',
              f'<h3>{_e(entry.get("title") or entry.get("id"))}</h3>']
     if entry.get("view"):
         parts.append(f'<p>{_e(_clip(entry["view"]))}</p>')
-    if follow:
+    url = _pack_url(entry)
+    link = f'<a class="go" href="{_e(url)}">Read it on equitylayer.io →</a>' if url else ""
+    if follow is not None:
         due = follow.get("next_check_at") or follow.get("fresh_until")
-        parts.append(f'<p class="muted small">Checked with your other items' + (f"; next check {_e(due)}" if due else "")
-                     + '. Hermes shows you when the Pack changes.</p>')
-        parts.append(f'<p><a class="go" href="{_e(_pack_url(entry))}">Read it on equitylayer.io →</a></p>')
+        if follow.get("pending_review"):
+            parts.append('<p class="muted small">An update to this Pack is waiting for your review. Ask Hermes to '
+                         'check it.</p>')
+        else:
+            parts.append('<p class="muted small">Checked with your other items' + (f"; next check {_e(due)}" if due else "")
+                         + '. Hermes shows you when the Pack changes.</p>')
+        parts.append(f"<p>{link}</p>" if link else "")
     else:
-        parts.append('<p class="muted small">Its hypotheses, what would prove each wrong, and the readings it watches.'
-                     '</p><div class="actions">'
-                     f'<button type="button" data-hermes-send="Follow the EquityLayer Research Pack {_e(entry.get("id"))}.">'
-                     'Follow this Pack</button>'
-                     f'<a class="go" href="{_e(_pack_url(entry))}">Read it on equitylayer.io →</a></div>')
+        pid = _pack_id(entry.get("id"))
+        parts.append('<p class="muted small">Its hypotheses, what would prove each wrong, and the readings it watches. '
+                     + _e(as_of) + '</p><div class="actions">'
+                     + (f'<button type="button" data-hermes-send="Follow the EquityLayer Research Pack {pid}.">'
+                        'Follow this Pack</button>' if pid else "")
+                     + link + "</div>")
     return "".join(parts) + "</section>"
 
 
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
            preview: dict | None = None, saved_at: str = "", packs: list[dict] | None = None,
-           followed: dict[str, dict] | None = None) -> str:
+           followed: dict[str, dict] | None = None, packs_as_of: str | None = None) -> str:
     followed = followed or {}
     stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
     about = describe(profile)
@@ -446,7 +475,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
-    body += _pack_cards(pack_themes[:3], packs, followed)
+    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of)
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:
