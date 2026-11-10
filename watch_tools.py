@@ -70,6 +70,7 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
         "name": data.get("name") or variable,
         "period_basis": data.get("period_basis"),
         "chain_position": data.get("chain_position"),
+        "category": data.get("category"),
         "company": role_for(data.get("entity")),
         "entity": data.get("entity"),
         "unit": data.get("unit"),

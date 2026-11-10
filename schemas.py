@@ -326,6 +326,8 @@ EL_DASHBOARD_RENDER = {
             "preview_variables": {"type": "array", "items": {"type": "string"},
                                   "description": "Up to 8 variable ids to show as a not-saved preview."},
             "preview_title": {"type": "string", "description": "Short title, for example \"CPO live readings\"."},
+            "preview_theme": {"type": "string", "enum": ["optical_cpo", "space_infrastructure", "custom_asic", "physical_ai"],
+                              "description": "The sector of the preview, so the dashboard links to its page."},
         },
     },
 }

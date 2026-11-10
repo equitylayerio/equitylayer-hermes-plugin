@@ -19,6 +19,13 @@ from .profile_store import describe
 from .watch_store import is_watch_due
 
 FILE_NAME = "dashboard.html"
+# Where each sector's public page lives; the dashboard links there as the way to EquityLayer's own research.
+SECTOR_PAGES = {
+    "optical_cpo": "https://equitylayer.io/themes/optical-cpo",
+    "space_infrastructure": "https://equitylayer.io/themes/space-infrastructure",
+    "physical_ai": "https://equitylayer.io/themes/physical-ai",
+}
+SITE = "https://equitylayer.io"
 STATUS_TEXT = {"seen": "seen", "against": "against", "late": "late", "no_data": "no data", "not_due": "not due"}
 
 
@@ -77,6 +84,25 @@ def _company(row: dict) -> str:
     return (name.split(" (")[0] if " (" in name else name.split(" ")[0]).strip() or str(row.get("entity") or "")
 
 
+def _signal(row: dict) -> str:
+    category = str(row.get("category") or "")
+    name = str(row.get("name") or "").lower()
+    if category == "demand":
+        return "Demand"
+    if category == "margin":
+        return "Pricing"
+    if category == "cash":
+        return "Capacity" if "property" in name or "capex" in name else "Cash flow"
+    if category == "revenue":
+        return "Revenue pulse" if row.get("cadence") == "monthly" else "Revenue"
+    return ""
+
+
+def _signal_tag(row: dict) -> str:
+    label = _signal(row)
+    return f'<span class="sig">{_e(label)}</span> ' if label else ""
+
+
 def _role_line(row: dict) -> str:
     company = row.get("company") if isinstance(row.get("company"), dict) else None
     if not company or not company.get("role"):
@@ -133,7 +159,7 @@ def _watch_card(record: dict) -> str:
                    else f'{_num(latest.get("value"))} <span class="unit">{_e(r.get("unit"))}</span>')
         new = '<span class="dot" title="new since you last read">●</span>' if r.get("new") else ""
         rows.append(
-            f'<tr><td>{new}{_e(r.get("name"))}{_role_line(r)}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
+            f'<tr><td>{new}{_signal_tag(r)}{_e(r.get("name"))}{_role_line(r)}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
             f'<td class="num">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
             f'<td class="num">{_e(r.get("change"))}</td><td>{_spark(r.get("recent") or [])}</td>'
             f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
@@ -217,7 +243,7 @@ def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: 
 
 
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
-           preview: dict | None = None) -> str:
+           preview: dict | None = None, saved_at: str = "") -> str:
     stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M Taipei")
     about = describe(profile)
     needs = []
@@ -296,6 +322,17 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     if sources:
         body.append('<section class="card"><h2>Sources</h2><ul class="small">'
                     + "".join(f"<li>{_e(s)}</li>" for s in sources[:12]) + "</ul></section>")
+    themes = [t for t in sorted(groups, key=_theme_order) if t != "other"]
+    if preview and preview.get("theme") and preview["theme"] not in themes:
+        themes.insert(0, preview["theme"])
+    for theme in themes[:3]:
+        page = SECTOR_PAGES.get(theme, SITE)
+        body.append(f'<section class="card pack"><p class="eyebrow">EquityLayer Research Pack</p>'
+                    f'<h3>{_e(_theme_label(theme))}</h3><p>EquityLayer\'s own thesis for this sector, verified by its research '
+                    f'team with the readings that would prove it wrong, is in preparation. See the industry map and get '
+                    f'notified when it is published.</p><p><a class="go" href="{_e(page)}">Open on equitylayer.io →</a></p></section>')
+    body.append(f'<p class="muted small">Saved on this machine at <code>{_e(saved_at)}</code>. Reopen it any time with '
+                '<code>/el dashboard</code>, from Artifacts in Hermes Desktop, or in any browser.</p>' if saved_at else "")
     body.append('<footer class="muted small">Generated on this machine from your local files. EquityLayer reports '
                 "what moved and stops: nothing here says what to buy, sell, size or time. Not investment advice.</footer>")
     sidebar = _sidebar(groups, watchlists, preview, bool(needs))
@@ -337,7 +374,7 @@ border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 .actions{{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}}.actions button{{font:600 14px/1 var(--body);padding:12px 16px;border-radius:8px;
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
-.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
+.sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.go{{font-weight:600}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
 a{{color:var(--forest-2)}}footer{{margin-top:28px}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}

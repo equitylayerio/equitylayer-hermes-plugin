@@ -151,7 +151,9 @@ class EquityLayerTools(HarnessTools, WatchTools):
     def _render_dashboard(self, preview: dict | None = None):
         theses, _ = self._harness_store_factory().all()
         watchlists, _ = self._watch_store_factory().all()
-        page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview)
+        target = self._dashboard_root() / dashboard_page.FILE_NAME
+        page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview,
+                                     saved_at=str(target))
         return dashboard_page.write(self._dashboard_root(), page)
 
     def _preview(self, args: dict) -> dict | None:
@@ -171,7 +173,8 @@ class EquityLayerTools(HarnessTools, WatchTools):
             row["new"] = False
             rows.append(row)
         title = " ".join(str(args.get("preview_title") or "Live readings").split())[:80]
-        return {"title": title, "as_of": today_taipei(), "rows": rows}
+        theme = args.get("preview_theme") if args.get("preview_theme") in dashboard_page.THEME_LABELS else None
+        return {"title": title, "as_of": today_taipei(), "rows": rows, "theme": theme}
 
     def _refresh_dashboard(self) -> None:
         """Keep the local page current after a check. A failure here never fails the check."""
@@ -188,7 +191,8 @@ class EquityLayerTools(HarnessTools, WatchTools):
             # Hermes Desktop renders a ::preview directive live inside the message, so the dashboard is
             # in the chat itself rather than only under Artifacts.
             "markdown": (f"Your dashboard: what you follow, what needs you, recent events and what is due next, "
-                         f"built on this machine.\n\n::preview{{file=\"{path}\" height=\"560\"}}"),
+                         f"built on this machine.\n\n::preview{{file=\"{path}\" height=\"560\"}}\n\n"
+                         f"It is saved at `{path}`. Reopen it any time with `/el dashboard` or from Artifacts."),
         }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:

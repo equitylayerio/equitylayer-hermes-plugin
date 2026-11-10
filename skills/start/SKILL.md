@@ -18,7 +18,7 @@ It follows the same four decisions as EquityLayer's setup prompt (https://equity
 - **Introduce EquityLayer as you go,** in at most three short sentences across the whole setup, each where it fits, plain and with no superlatives:
   - before decision 1: EquityLayer makes your agent better at equity research: it checks company filings and exchange open data instead of guessing;
   - with the live readings: every reading carries its source and what it cannot show, gaps are named instead of filled, and everything you track stays on this machine;
-  - in the close: when EquityLayer publishes a Research Pack for their sector (a thesis its research team verifies, with what would prove it wrong), it shows up here first; more at equitylayer.io.
+  - in the close: EquityLayer's own Research Pack for their sector (a thesis its research team verifies, with what would prove it wrong) is in preparation; the industry map is on equitylayer.io, where they can get notified when it is published (the dashboard has the link).
 - **Never say what to buy, sell, size or time.** Never write a view for the person or present one as EquityLayer's.
 
 ## Before the first question
@@ -36,15 +36,15 @@ Call `el_profile_get` and `el_list_registry`.
 
 Offer the four `sectors` from `el_profile_get`, in order, with their status, CPO recommended. Gloss the one they pick.
 
-**Before decision 2, show what is live.** Call `el_plan_thesis` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Show each in one plain line:
+**Before decision 2, show what is live.** Call `el_plan_thesis` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Use the candidate's `category` to mix what the readings tell: demand (segment revenue or management statements), capacity (capex), pricing (gross margin), and Taiwan monthly revenue for a high-frequency pulse. Total revenue alone is coarse; don't show three revenue lines. Show each in one plain line:
 - what the company does (`company_role`, from the company's own description, when the tool returns one);
-- the latest reading and its period;
+- the latest reading and its period, and what kind of signal it is (demand, capacity, pricing or revenue pulse);
 - what it shows;
 - what it cannot show (the caveat).
 
 A withheld value is no data: say why, and never guess it.
 
-Then call `el_dashboard_render` with `preview_variables` (up to eight candidates that cover different companies and chain steps, including those three) and `preview_title` ("<sector> live readings"). Copy its `::preview{...}` line exactly, on a line of its own, so the dashboard shows inside the chat, and say nothing is saved until they say yes. Its buttons send the decision 2 answer for them.
+Then call `el_dashboard_render` with `preview_variables` (up to eight candidates that cover different companies, chain steps and signal types, including those three), `preview_title` ("<sector> live readings") and `preview_theme`. Copy its `::preview{...}` line exactly, on a line of its own, so the dashboard shows inside the chat, and say nothing is saved until they say yes. Its buttons send the decision 2 answer for them.
 
 **If the sector has no live readings yet** (the plan returns no candidates, as space does today), say so in one line and ask instead:
 1. Pick another sector (recommended).
@@ -66,7 +66,7 @@ A view takes a stand and could be wrong.
 
 ## Decision 3. One card to approve
 
-**For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), one line each with its latest level and caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_watch_save` with the title, the variable ids and the theme.
+**For curated readings:** list five to eight variables from the plan that cover different companies and chain steps (one per company where possible), and mix categories: at least one demand reading, one capacity reading (capex) and one pricing reading (gross margin) when the plan has them, plus Taiwan monthly revenue. One line each: latest level, what it tells about the sector (in one plain clause), and its caveat, grouped by chain step. Title the card "<sector> curated readings". Ask them to reply "yes" or say what to change. On yes, call `el_watch_save` with the title, the variable ids and the theme.
 
 **For a view:** call `el_plan_thesis` with their view, the theme and any companies they named. Call `el_get_variable` on each variable you propose. Show one card:
 - hypothesis (their words), why, and the companies it covers;
@@ -121,7 +121,7 @@ Call el_harness_check with no arguments, then el_watch_check with no arguments, 
 Call `el_profile_save` with what they chose: `sectors`, `path` (curated, own_view or formed_view), `check`, `check_time`, `timezone`, and `language` only when they wrote in a language other than English.
 
 Then call `el_dashboard_render` again, so the dashboard shows the schedule, and close in three lines:
-- What is saved (this machine only), and that the dashboard is under Artifacts.
+- What is saved (this machine only), and where the dashboard lives: the path the tool returned; reopen it with `/el dashboard` or from Artifacts, no need to scroll back to the preview.
 - When the next check runs, and that it reports here only when something is new or needs them.
 - That it never says what to buy, sell, size or time, and never marks anything as read without them.
 
