@@ -196,7 +196,7 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
     assert "EquityLayer thesis · CPO and optical networking · you follow it" in glance
     assert "Would be wrong if:" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
-    assert "CPO Pack readings: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
+    assert "Readings for: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
 
     assert _remove_item(service, {"item_id": fid})["ok"]
     assert store.get(fid) is None and not (tmp_path / "watchlists" / f"{readings_id}.json").exists()
@@ -402,3 +402,17 @@ def test_registry_list_shows_the_pack_type(make_service):
     import json as _json, pathlib as _pl
     listed = call(service.el_research_pack, {"action": "list"})
     assert "| type |" in listed["markdown"] or "type" in listed["markdown"].splitlines()[2]
+
+
+
+def test_dashboard_is_plain_a_packs_readings_sit_on_its_card(make_service):
+    service, _, store = make_service(PACK_ROUTES)
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    call(service.el_check, {"item_id": fid})
+    page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
+    glance = page[page.index('id="glance"'):page.index('id="evidence"')]
+    assert "readings:</b>" in glance and 'href="#evidence"' in glance
+    assert "What your readings show" not in page  # no second card for the same Pack's readings
+    assert "Discover → Follow" not in page and "Watchlist <b>" not in page
+    assert "new reading" in page and "I&#x27;ve read it" not in page and "I've read it" in page
+    assert '<details class="row-more"><summary>About this reading</summary>' in page

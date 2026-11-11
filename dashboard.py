@@ -143,7 +143,9 @@ def _chain_strip(rows: list[dict]) -> str:
 def _watch_card(record: dict) -> str:
     last = record.get("last_check") if isinstance(record.get("last_check"), dict) else None
     unread = isinstance(record.get("pending"), dict)
-    head = (f'<div class="card-head"><h3>{_e(record.get("title"))}</h3>'
+    title = record.get("title")
+    shown = f"Readings for: {_short_name(title)}" if record.get("follow_id") and title != _short_name(title) else title
+    head = (f'<div class="card-head"><h3>{_e(shown)}</h3>'
             f'<span class="tag{" warn" if unread else ""}">{"unread" if unread else ("due" if is_watch_due(record) else "up to date")}</span></div>')
     if not last:
         return f'<section class="card">{head}<p class="muted">Not checked yet. Ask Hermes to check this watchlist.</p></section>'
@@ -160,9 +162,13 @@ def _watch_card(record: dict) -> str:
         reading = (f'withheld ({_e(str(latest.get("withheld")).replace("_", " "))})' if latest.get("withheld")
                    else f'{_num(latest.get("value"))} <span class="unit">{_e(r.get("unit"))}</span>')
         new = '<span class="dot" title="new since you last read">●</span>' if r.get("new") else ""
+        about = _role_line(r) + (f'<div class="caveat">{_e(r.get("caveat"))}</div>' if r.get("caveat") else "")
+        wordy = isinstance(latest.get("value"), str) and not latest.get("withheld")
         rows.append(
-            f'<tr><td>{new}{_signal_tag(r)}{_e(r.get("name"))}{_role_line(r)}<div class="caveat">{_e(r.get("caveat"))}</div></td>'
-            f'<td class="num">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
+            f'<tr><td>{new}{_signal_tag(r)}{_e(r.get("name"))}'
+            + (f'<details class="row-more"><summary>About this reading</summary>{about}</details>' if about else "")
+            + '</td>'
+            f'<td class="{"txt" if wordy else "num"}">{reading}<div class="muted">{_e(latest.get("period"))}</div></td>'
             f'<td class="num">{_e(r.get("change"))}</td><td>{_spark(r.get("recent") or [])}</td>'
             f'<td class="muted num">{_e(r.get("next_reading"))}</td></tr>')
     table = ('<details class="more" open><summary>All readings</summary><div class="tbl"><table><thead><tr><th>Reading</th><th>Latest</th><th>Change</th><th>Recent</th><th>Next</th></tr></thead>'
@@ -227,7 +233,7 @@ def _thesis_hero(record: dict) -> str:
             f'<p class="hero-text">{_e(harness.get("hypothesis"))}</p>{status}</section>')
 
 
-def _pack_hero(record: dict, compact: bool = False, open_: bool = True) -> str:
+def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings: dict | None = None) -> str:
     """A followed Pack at the top: EquityLayer's thesis, what would prove each part wrong, and when it is checked."""
     summary = record.get("pack") if isinstance(record.get("pack"), dict) else {}
     label = THEME_LABELS.get(summary.get("theme_id")) if summary.get("theme_id") in THEME_LABELS else None
@@ -240,7 +246,7 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True) -> str:
         items += (f'<li>{_e(h.get("statement"))} <span class="tag">confidence {_e(h.get("confidence") or "—")}</span>'
                   f'{wrong}</li>')
     pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
-    below = " · the readings it watches are below as evidence" if record.get("readings_id") else ""
+    below = "" if readings else (" · the readings it watches are below as evidence" if record.get("readings_id") else "")
     if pending:
         label_text = "New revision to review" if pending.get("revision_changed") else "New data in its readings"
         status = f'<p><span class="verdict v-warn">{label_text}</span></p>'
@@ -255,12 +261,29 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True) -> str:
             + (f'<p class="hero-text pack-view">{_e(summary.get("view"))}</p>' if summary.get("view") else "")
             + ((f'<details class="more"{" open" if open_ else ""}><summary>{len(summary.get("hypotheses") or [])} '
                 f'hypotheses and what would prove each wrong</summary><ol class="hyp">{items}</ol></details>'
-                if compact else f'<ol class="hyp">{items}</ol>') if items else "") + status + link + "</section>")
+                if compact else f'<ol class="hyp">{items}</ol>') if items else "") + _readings_summary(readings)
+            + status + link + "</section>")
 
 
 def _change_pct(row: dict) -> float | None:
     match = re.match(r"^([+-]\d+(?:\.\d+)?)%", str(row.get("change") or ""))
     return float(match.group(1)) if match else None
+
+
+def _readings_summary(record: dict | None) -> str:
+    """One line on a followed Pack's card: how its readings moved, and the largest move."""
+    last = (record or {}).get("last_check") if isinstance((record or {}).get("last_check"), dict) else None
+    rows = (last or {}).get("rows") or []
+    if not rows:
+        return ""
+    pcts = [(p, r) for r in rows if (p := _change_pct(r)) is not None]
+    up = sum(1 for p, _ in pcts if p > 0.5)
+    down = sum(1 for p, _ in pcts if p < -0.5)
+    flat = len(pcts) - up - down
+    top = max(pcts, key=lambda pr: abs(pr[0]))[1] if pcts else None
+    biggest = f" · largest move {_e(_company(top))} {_e(top.get('change'))}" if top else ""
+    return (f'<p class="pack-readings"><b>Its {len(rows)} readings:</b> {up} up, {down} down, {flat} flat'
+            f'{biggest}. <a href="#evidence">See them below</a>.</p>')
 
 
 def _readings_hero(record: dict, linked: bool = False) -> str:
@@ -306,6 +329,13 @@ def _theme_order(theme: str) -> int:
     return THEME_ORDER.index(theme) if theme in THEME_ORDER else len(THEME_ORDER)
 
 
+def _short_name(title: Any) -> str:
+    """A Pack's readings list is named after the Pack; the sidebar only needs the Pack part."""
+    text = str(title or "")
+    marker = " Pack readings: "
+    return text.split(marker, 1)[1] if marker in text else text
+
+
 def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: bool) -> str:
     items = ['<p class="side-label">Workspace</p><nav><a href="#glance">At a glance</a>']
     if preview:
@@ -319,7 +349,8 @@ def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: 
             group = groups[theme]
             subs = [r.get("title") for r in group["watch"]] + [r.get("title") for r in group["theses"]]
             items.append(f'<a href="#theme-{_e(theme)}">{_e(_theme_label(theme))}</a>'
-                         + "".join(f'<span class="side-sub">{_e(t)}</span>' for t in subs[:4]))
+                         + "".join(f'<span class="side-sub" title="{_e(t)}">{_e(_short_name(t))}</span>'
+                                   for t in subs[:4]))
         items.append("</nav>")
     companies: dict[str, str] = {}
     for record in watchlists:
@@ -471,7 +502,11 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     for record in watchlists:
         if isinstance(record.get("pending"), dict):
             new = ((record.get("last_check") or {}).get("new_count") or 0)
-            needs.append(f'<li>Watchlist <b>{_e(record.get("title"))}</b>: {_e(new)} new reading(s) to read</li>')
+            owner = next((f for f in followed.values() if f.get("follow_id") == record.get("follow_id")
+                          and isinstance(f.get("pack"), dict)), None) if record.get("follow_id") else None
+            name = (owner or {}).get("pack", {}).get("title") if owner else record.get("title")
+            needs.append(f'<li><b>{_e(name)}</b>: {_e(new)} new reading{"" if new == 1 else "s"} to read. '
+                         'Tell Hermes "I\'ve read it" when you have.</li>')
     events: dict[str, dict] = {}
     upcoming: list[dict] = []
     sources: list[str] = []
@@ -497,7 +532,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
         up_items += f'<li><span class="muted">{_e(u.get("date"))}</span> {_e(u.get("names"))}: {_e(u.get("reason"))}</li>'
     empty = not theses and not watchlists and not preview and not followed
     body = [
-        f'<header><div class="brand"><svg width="26" height="26" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="3" fill="#173f32"/><circle cx="27.5" cy="10.5" r="4.25" fill="#c49a50"/><rect x="8.5" y="12.5" width="21" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="20.25" width="15" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="28" width="21" height="5.25" fill="#f8f5eb"/></svg>EquityLayer</div><p class="eyebrow">Discover → Follow → Track changes</p>'
+        f'<header><div class="brand"><svg width="26" height="26" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="3" fill="#173f32"/><circle cx="27.5" cy="10.5" r="4.25" fill="#c49a50"/><rect x="8.5" y="12.5" width="21" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="20.25" width="15" height="5.25" fill="#f8f5eb"/><rect x="8.5" y="28" width="21" height="5.25" fill="#f8f5eb"/></svg>EquityLayer</div>'
         f'<h1>Your research</h1><p class="muted">Updated {_e(stamp)}'
         + (f" · {_e(about)}" if about else "") + "</p></header>",
     ]
@@ -546,10 +581,13 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                            if isinstance(r.get("pack"), dict) and pid not in unpublished),
                           key=lambda item: rank.get(item[0], len(rank)))[:4]
     several = len(hero_records) > 1
-    pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0) for n, (pid, r) in enumerate(hero_records)}
+    watch_by_id = {w.get("id"): w for w in watchlists}
+    pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0, readings=watch_by_id.get(r.get("readings_id")))
+                   for n, (pid, r) in enumerate(hero_records)}
     hero_follows = {r.get("follow_id") for pid, r in hero_records}
+    # A Pack's readings are summed up on its own card; only readings you follow on their own get a card here.
     own = [_thesis_hero(r) for r in theses[:3]] or [
-        h for h in (_readings_hero(r, r.get("follow_id") in hero_follows) for r in watchlists[:2]) if h]
+        h for h in (_readings_hero(r) for r in [w for w in watchlists if w.get("follow_id") not in hero_follows][:2]) if h]
     heroes = list(pack_heroes.values()) + own
     if heroes:
         body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
@@ -566,7 +604,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:
-        body.append('<h2 class="section">Evidence</h2><p class="muted small">The readings behind it, by sector and '
+        body.append('<h2 class="section" id="evidence">Evidence</h2><p class="muted small">The readings behind it, by sector and '
                     'supply-chain step.</p>')
     # Themes in the main column, one section per sector (the earlier local-workspace layout).
     for theme in sorted(groups, key=_theme_order):
@@ -596,7 +634,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
 
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
