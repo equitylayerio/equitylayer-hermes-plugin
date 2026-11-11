@@ -298,6 +298,24 @@ def _model_line(row: dict) -> tuple[str, str]:
     """Which line of a company's financial model a reading feeds, and how often it lands.
 
     Read off the variable itself (id, unit, name); nothing here is an estimate or a new fact."""
+    given = row.get("model_line") if isinstance(row.get("model_line"), dict) else None
+    if given and given.get("line") in MODEL_LINES:      # EquityLayer's own mapping, when the variable has one
+        line = MODEL_LINES[given["line"]]
+        share = given.get("share_of_total") if isinstance(given.get("share_of_total"), dict) else None
+        if share and isinstance(share.get("pct"), (int, float)):
+            line += f", about {round(share['pct'])}% of the company total" + (f" in {share['period']}" if share.get("period") else "")
+        return line, str(given.get("timing") or "")
+    line, when = _derived_model_line(row)
+    return (f"{line} (derived)" if line else ""), when
+
+
+MODEL_LINES = {"company_revenue": "company revenue", "segment_revenue": "segment revenue", "gross_margin": "gross margin",
+               "capex": "capex", "orders_outlook": "orders and outlook (not revenue yet)",
+               "capacity_supply": "capacity and supply (not revenue)"}
+
+
+def _derived_model_line(row: dict) -> tuple[str, str]:
+    """A label read off the variable's id, unit and name, for variables EquityLayer has not mapped."""
     var = str(row.get("variable") or "").lower()
     name = str(row.get("name") or "").lower()
     latest = row.get("latest") or {}
@@ -1092,6 +1110,8 @@ def _reading(row: dict) -> dict:
     latest = row.get("latest") or {}
     return {"variable": row.get("variable"), "name": row.get("name"), "company": _company(row),
             "entity": row.get("entity"), "model_line": _model_line(row)[0] or None, "timing": _model_line(row)[1] or None,
+            "model_line_source": "equitylayer" if isinstance(row.get("model_line"), dict) else "derived",
+            "share_of_total": (row.get("model_line") or {}).get("share_of_total") if isinstance(row.get("model_line"), dict) else None,
             "period": latest.get("period"), "value": latest.get("value"), "unit": row.get("unit"),
             "withheld": latest.get("withheld"), "change": row.get("change") or None,
             "next_reading": row.get("next_reading"), "caveat": row.get("caveat"), "source_url": row.get("source_url")}

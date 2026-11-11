@@ -71,6 +71,7 @@ def _row(variable: str, data: dict, seen_period: str | None) -> dict:
         "period_basis": data.get("period_basis"),
         "chain_position": data.get("chain_position"),
         "category": data.get("category"),
+        "model_line": data.get("model_line") if isinstance(data.get("model_line"), dict) else None,
         "company": role_for(data.get("entity")),
         "entity": data.get("entity"),
         "unit": data.get("unit"),

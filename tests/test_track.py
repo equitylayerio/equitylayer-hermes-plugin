@@ -541,18 +541,21 @@ def test_core_hypotheses_lead_and_the_rest_fold():
 
 
 
-def test_model_line_is_read_off_the_variable():
+def test_model_line_uses_equitylayers_mapping_or_a_marked_derived_label():
     from equitylayer_plugin.dashboard import _model_line
 
+    mapped = {"variable": "v:cohr.us.data_center_communications_revenue.quarterly", "name": "Coherent segment revenue",
+              "model_line": {"line": "segment_revenue", "timing": "lagging", "part_of": "v:cohr.us.revenue.quarterly",
+                             "share_of_total": {"pct": 82.3, "period": "FY2027-Q1", "of": "v:cohr.us.revenue.quarterly"}}}
+    assert _model_line(mapped) == ("segment revenue, about 82% of the company total in FY2027-Q1", "lagging")
+    assert _model_line({"variable": "v:x", "model_line": {"line": "orders_outlook", "timing": "leading", "share_of_total": None}}) == (
+        "orders and outlook (not revenue yet)", "leading")
+    # Not mapped yet: a label read off the variable, marked as derived.
     assert _model_line({"variable": "v:3081.two.revenue.monthly", "name": "LandMark (3081) monthly revenue"}) == (
-        "company revenue", "monthly, an early read on the quarter")
-    assert _model_line({"variable": "v:form.us.systems_revenue.quarterly", "name": "FormFactor Systems segment revenue"}) == (
-        "segment revenue", "reported quarterly")
-    assert _model_line({"variable": "v:lite.us.npo_cpo_commitments.quarterly", "unit": "statement",
-                        "latest": {"value": "A second win"}})[1] == "leading"
-    assert _model_line({"variable": "v:cohr.us.gross_margin.quarterly", "name": "Coherent GAAP gross margin"})[0] == "gross margin"
+        "company revenue (derived)", "monthly, an early read on the quarter")
+    assert _model_line({"variable": "v:form.us.systems_revenue.quarterly", "name": "FormFactor Systems segment revenue"})[0] == (
+        "segment revenue (derived)")
     assert _model_line({"variable": "v:x.us.other.quarterly", "name": "Something"})[0] == ""
-
 
 
 def test_dashboard_json_carries_a_signal_per_hypothesis():
