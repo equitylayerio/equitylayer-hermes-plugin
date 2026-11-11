@@ -193,8 +193,8 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
 
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index("At a glance"):page.index("Evidence")]
-    assert "Thesis Pack · CPO · you follow it" in glance
-    assert "Wrong if" in glance and "LandMark, a laser epi supplier" in glance
+    assert '<p class="eyebrow">Thesis Pack · CPO</p>' in glance
+    assert "wrong if" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
     assert "Readings for: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
 
@@ -295,7 +295,7 @@ def test_several_packs_in_one_sector(make_service):
                 for n, pid in enumerate(("cpo-timing-and-form", "cpo-laser-inp-test-bottleneck"), 1)}
     page = render(None, [], [], packs=packs, followed=followed)
     glance = page[page.index("At a glance"):]
-    assert glance.count("Thesis Pack · CPO · you follow it") == 2
+    assert glance.count('<p class="eyebrow">Thesis Pack · CPO</p>') == 2
     assert glance.count('<details class="more" open><summary>2 hypotheses') == 1  # the first opens, the rest fold
     assert glance.count('<details class="more"><summary>2 hypotheses') == 1
     assert page.count("Follow this Pack") == 1  # only the Pack they don't follow is offered
@@ -332,7 +332,7 @@ def test_dashboard_caps_pack_heroes_at_four():
                                        "hypotheses": [{"statement": "h", "confidence": "low"}]}}
                 for n in range(1, 6)}
     page = render(None, [], [], followed=followed)
-    assert page.count("Thesis Pack · CPO · you follow it") == 4
+    assert page.count('<p class="eyebrow">Thesis Pack · CPO</p>') == 4
     assert page.count("Research Pack · you follow it") == 1  # the fifth still shows, as a card
 
 
@@ -411,7 +411,7 @@ def test_dashboard_is_plain_a_packs_readings_sit_on_its_card(make_service):
     call(service.el_check, {"item_id": fid})
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index('id="glance"'):page.index('id="evidence"')]
-    assert "readings:</b>" in glance and 'href="#evidence"' in glance
+    assert 'class="chip"' in glance and "wrong if" in glance
     assert "What your readings show" not in page  # no second card for the same Pack's readings
     assert "Discover → Follow" not in page and "Watchlist <b>" not in page
     assert "new reading" in page and "I&#x27;ve read it" not in page and "I've read it" in page
@@ -435,8 +435,8 @@ def test_pack_card_is_a_checklist():
                   "next_reading": "2026-01-01", "entity": "3081.TWO"}]}}
     page = render(None, [], [watch], followed={"p": record})
     card = page[page.index("thesis-card"):page.index("</section>", page.index("thesis-card"))]
-    for part in (">Thesis<", "Lasers are the bottleneck", "H1", "Laser supply is rationed<", "confidence low",
-                 "tested by 2027-02-10", "Wrong if", "A filing says supply caught up.", "Tracks",
-                 "LandMark monthly revenue", "540,492", ">Next<", "data was due, not in yet", "Hermes checks this Pack"):
+    for part in ("Thesis Pack · CPO", "Lasers are the bottleneck", "H1", "Laser supply is rationed<", "low",
+                 "test 2027-02-10", "wrong if A filing says supply caught up.", 'class="chip"', "540,492",
+                 "+3.8%", ">Next<", "late: ", "Pack check"):
         assert part in card, part
     assert "EquityLayer Research Pack" not in page

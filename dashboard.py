@@ -244,24 +244,25 @@ def _short_claim(text: Any, limit: int = 130) -> str:
 
 
 def _var_chip(row: dict) -> str:
+    """A tracked variable as one short chip: company, latest value, change."""
     latest = row.get("latest") or {}
     if latest.get("withheld"):
         value = "withheld"
     elif isinstance(latest.get("value"), str):
-        value = "statement"
+        value = f'statement {latest.get("period") or ""}'.strip()
     elif latest.get("value") is not None:
-        value = f'{_num(latest.get("value"))} {row.get("unit") or ""}'.strip()
+        value = _num(latest.get("value"))
     else:
         value = "no data yet"
-    change = f' · {row.get("change")}' if row.get("change") else ""
-    period = f' ({latest.get("period")})' if latest.get("period") else ""
-    return (f'<li><span class="tc-var">{_e(row.get("name"))}</span>'
-            f'<span class="tc-val">{_e(value)}{_e(period)}{_e(change)}</span></li>')
+    change = str(row.get("change") or "").split(" vs ")[0]
+    tone = "up" if change.startswith("+") else ("down" if change.startswith("-") or change.startswith("−") else "")
+    return (f'<span class="chip" title="{_e(row.get("name"))} · {_e(latest.get("period"))} · {_e(row.get("unit"))}">'
+            f'{_e(_company(row))} <b>{_e(value)}</b>'
+            + (f' <span class="chg {tone}">{_e(change)}</span>' if change else "") + "</span>")
 
 
 def _next_items(record: dict, rows: list[dict], today: str | None = None) -> list[str]:
-    """What changes next, by date: data due for the variables it watches, and the Pack's own check. A date that has
-    passed without the data is said plainly, not shown as upcoming."""
+    """What changes next, by date. A date that passed without the data says so instead of looking upcoming."""
     from .harness_store import today_taipei
 
     today = today or today_taipei()
@@ -272,18 +273,19 @@ def _next_items(record: dict, rows: list[dict], today: str | None = None) -> lis
             names = by_date.setdefault(when[:10], [])
             if _company(row) not in names:
                 names.append(_company(row))
-    events = [(day, f'<li><b>{_e(day)}</b> '
-                    + ("data was due, not in yet: " if day < today else "new data due: ")
-                    + f'{_e(", ".join(names))}</li>') for day, names in by_date.items()]
+    events = [(day, f'<span class="nx{" late" if day < today else ""}"><b>{_e(day[5:])}</b> '
+                    + ("late: " if day < today else "") + f'{_e(", ".join(names))}</span>')
+              for day, names in by_date.items()]
     check = str(record.get("next_check_at") or record.get("fresh_until") or "")[:10]
     if check:
-        events.append((check, f'<li><b>{_e(check)}</b> Hermes checks this Pack</li>'))
-    return [html for _, html in sorted(events)[:5]]
+        events.append((check, f'<span class="nx"><b>{_e(check[5:])}</b> Pack check</span>'))
+    return [h for _, h in sorted(events)[:4]]
 
 
 def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings: dict | None = None) -> str:
-    """A followed Pack as a card you can scan: the thesis, each hypothesis with the threshold that would break it
-    and the variables it tracks, and what changes next."""
+    """A followed Pack as a scoreboard: the thesis, then one compact row per hypothesis (claim, the numbers it
+    tracks, when it is tested, and what would prove it wrong), then what changes next. Details sit behind hover
+    and the full Pack link."""
     summary = record.get("pack") if isinstance(record.get("pack"), dict) else {}
     theme = SHORT_THEMES.get(summary.get("theme_id"), "")
     kind = "Tracking Pack" if summary.get("category") == "tracking" else "Thesis Pack"
@@ -291,41 +293,31 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
     rows = [r for r in (last or {}).get("rows") or [] if isinstance(r, dict)]
     by_var = {r.get("variable"): r for r in rows}
     pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
-    if pending:
-        state = ("new revision to review" if pending.get("revision_changed") else "new data to read")
-        badge = f'<span class="tag warn">{_e(state)}</span>'
-    else:
-        badge = f'<span class="tag">next check {_e(str(record.get("next_check_at") or record.get("fresh_until") or "—")[:10])}</span>'
-
-    hyps = ""
-    for n, h in enumerate([h for h in (summary.get("hypotheses") or []) if isinstance(h, dict)][:8], 1):
-        tracked = [by_var[v] for v in h.get("variables") or [] if v in by_var]
-        chips = "".join(_var_chip(r) for r in tracked)
-        hyps += (f'<li class="tc-item"><div class="tc-claim" title="{_e(h.get("statement"))}">'
-                 f'<span class="tc-n">H{n}</span>{_e(_short_claim(h.get("statement")))}</div>'
-                 f'<div class="tc-meta"><span class="tag">confidence {_e(h.get("confidence") or "—")}</span>'
-                 + (f'<span class="tag">tested by {_e(h.get("due"))}</span>' if h.get("due") else "") + "</div>"
-                 + (f'<div class="tc-rule"><span class="tc-k">Wrong if</span>{_e(_clip(h.get("falsifier"), 220))}</div>'
-                    if h.get("falsifier") else "")
-                 + (f'<div class="tc-rule"><span class="tc-k">Tracks</span><ul class="tc-vars">{chips}</ul></div>' if chips else "")
-                 + "</li>")
-    count = len([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)])
-    hyp_block = ""
-    if hyps:
-        inner = f'<ol class="tc-list">{hyps}</ol>'
-        hyp_block = ((f'<details class="more"{" open" if open_ else ""}><summary>{count} hypotheses · what would prove '
-                      f'each wrong · what each tracks</summary>{inner}</details>') if compact
-                     else f'<div class="tc-sec">Hypotheses ({count})</div>{inner}')
-    nexts = _next_items(record, rows)
+    badge = (f'<span class="tag warn">{"new revision to review" if pending.get("revision_changed") else "new data to read"}</span>'
+             if pending else "")
     url = _https(summary.get("url"))
+    hyps = ""
+    hyp_list = [h for h in (summary.get("hypotheses") or []) if isinstance(h, dict)][:8]
+    for n, h in enumerate(hyp_list, 1):
+        chips = "".join(_var_chip(by_var[v]) for v in h.get("variables") or [] if v in by_var)
+        wrong = h.get("falsifier")
+        hyps += (f'<li class="tc-item"><div class="tc-row"><span class="tc-n">H{n}</span>'
+                 f'<span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
+                 f'<span class="tc-due">{_e(h.get("confidence") or "")}{" · " if h.get("confidence") and h.get("due") else ""}'
+                 f'{_e(("test " + str(h.get("due"))) if h.get("due") else "")}</span></div>'
+                 + (f'<div class="tc-chips">{chips}</div>' if chips else "")
+                 + (f'<div class="tc-wrong" title="{_e(wrong)}">✗ wrong if {_e(_clip(wrong, 110))}</div>' if wrong else "")
+                 + "</li>")
+    body = f'<ol class="tc-list">{hyps}</ol>' if hyps else ""
+    if compact and body:
+        body = f'<details class="more"{" open" if open_ else ""}><summary>{len(hyp_list)} hypotheses</summary>{body}</details>'
+    nexts = _next_items(record, rows)
     return (f'<section class="card hero pack thesis-card"><div class="tc-head"><p class="eyebrow">{_e(kind)}'
-            + (f" · {_e(theme)}" if theme else "") + f' · you follow it</p>{badge}</div>'
-            f'<div class="tc-sec">Thesis</div><h3 class="tc-thesis">{_e(summary.get("title"))}</h3>'
-            + (f'<p class="tc-view">{_e(_clip(summary.get("view"), 260))}</p>' if summary.get("view") else "")
-            + hyp_block
-            + (f'<div class="tc-sec">Next</div><ul class="tc-next">{"".join(nexts)}</ul>' if nexts else "")
-            + _readings_summary(readings)
-            + (f'<p><a class="go" href="{_e(url)}">Read the full Pack on equitylayer.io →</a></p>' if url else "")
+            + (f" · {_e(theme)}" if theme else "") + "</p>" + badge
+            + (f'<a class="tc-link" href="{_e(url)}" title="Read the full Pack on equitylayer.io">full Pack ↗</a>' if url else "")
+            + f'</div><h3 class="tc-thesis" title="{_e(summary.get("view"))}">{_e(summary.get("title"))}</h3>'
+            + body
+            + (f'<div class="tc-next"><span class="tc-k">Next</span>{"".join(nexts)}</div>' if nexts else "")
             + "</section>")
 
 
@@ -513,7 +505,7 @@ def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str =
     parts = [f'<section class="card pack"><p class="eyebrow">{_e(eyebrow)}</p>',
              f'<h3>{_e(entry.get("title") or entry.get("id"))}</h3>']
     if entry.get("view"):
-        parts.append(f'<p>{_e(_clip(entry["view"]))}</p>')
+        parts.append(f'<p class="tc-view" title="{_e(as_of)}">{_e(_clip(entry["view"], 160))}</p>')
     url = _pack_url(entry)
     link = f'<a class="go" href="{_e(url)}">Read it on equitylayer.io →</a>' if url else ""
     if follow is not None:
@@ -527,8 +519,7 @@ def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str =
         parts.append(f"<p>{link}</p>" if link else "")
     else:
         pid = _pack_id(entry.get("id"))
-        parts.append('<p class="muted small">Its hypotheses, what would prove each wrong, and the readings it watches. '
-                     + _e(as_of) + '</p><div class="actions">'
+        parts.append('<div class="actions">'
                      + (f'<button type="button" data-hermes-send="Follow the EquityLayer Research Pack {pid}.">'
                         'Follow this Pack</button>' if pid else "")
                      + link + "</div>")
@@ -698,7 +689,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;justify-content:space-between;align-items:center;gap:8px}}.tc-head .eyebrow{{margin:0}}.tc-sec{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.tc-thesis{{margin:0 0 4px}}.tc-view{{margin:0 0 4px;font-size:15px}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:10px}}.tc-item{{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper)}}.tc-claim{{font-weight:600;line-height:1.4}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2);margin-right:8px}}.tc-meta{{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}}.tc-rule{{display:grid;grid-template-columns:72px 1fr;gap:8px;font-size:13.5px;margin-top:4px}}.tc-k{{font:500 10px/1.8 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}}.tc-vars{{list-style:none;margin:0;padding:0;display:grid;gap:3px}}.tc-vars li{{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}}.tc-var{{color:var(--ink)}}.tc-val{{font-family:var(--mono);font-size:12.5px;color:var(--muted)}}.tc-next{{margin:0;padding-left:18px;font-size:14px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
 
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
