@@ -484,7 +484,7 @@ def test_chain_diagram_lights_thresholds_and_calendar(make_service, tmp_path):
     page, record, watch = page_for("2026-09", 540492)      # the baseline reading judges nothing
     assert 'class="light flat"' in page and 'class="light up"' not in page
     page, _, _ = page_for("2026-10", 480000)               # a later reading below the bar
-    assert 'class="light down"' in page and ">Weakens if<" in page and "LandMark &lt; 501,212" in page and "LandMark ≥ 540,492" in page
+    assert 'class="light down"' in page and ">Weakens if<" in page and "LandMark below the bar (&lt; 501,212)" in page and "LandMark above the bar (≥ 540,492)" in page
     assert "The CPO supply chain · where the theses sit" in page and "A · H1" in page and "not tracked yet" in page
     assert "Part of AI compute, in the network layer." in page and "https://equitylayer.io/themes/ai-compute" in page
     assert "<script" not in page

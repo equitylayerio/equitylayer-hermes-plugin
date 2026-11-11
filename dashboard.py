@@ -365,9 +365,16 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
             out = []
             for row, _ in found:
                 spec = reads.get(row.get("variable")) if isinstance(reads.get(row.get("variable")), dict) else {}
-                cond = next((r.get("if") for r in spec.get("rules") or [] if str(r.get("means")) == kind), None)
+                rule = next((r for r in spec.get("rules") or [] if str(r.get("means")) == kind), None) or {}
+                cond = rule.get("if")
                 if cond and str(cond).lstrip()[:1] in "<>=0123456789":
-                    out.append(f"{_company(row)} {_cond(cond)}")
+                    # Say where the bar comes from first; the exact figure is only its value.
+                    say = str(rule.get("say") or "")
+                    origin = say.split(":", 1)[0].strip() if ":" in say[:70] else say.split(".", 1)[0].strip()
+                    if origin and len(origin) <= 60:
+                        out.append(f"{_company(row)} {origin[:1].lower() + origin[1:]} ({_cond(cond)})")
+                    else:
+                        out.append(f"{_company(row)} {_cond(cond)}")
                 elif cond:                      # a condition in words already names who and what
                     out.append(_clip(cond, 110))
             return " · ".join(out[:3])
