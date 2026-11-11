@@ -194,7 +194,7 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index("At a glance"):page.index("Evidence")]
     assert '<p class="eyebrow">Thesis Pack · CPO</p>' in glance
-    assert "wrong if" in glance and "LandMark, a laser epi supplier" in glance
+    assert "Wrong if" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
     assert "Readings for: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
 
@@ -296,8 +296,8 @@ def test_several_packs_in_one_sector(make_service):
     page = render(None, [], [], packs=packs, followed=followed)
     glance = page[page.index("At a glance"):]
     assert glance.count('<p class="eyebrow">Thesis Pack · CPO</p>') == 2
-    assert glance.count('<details class="more" open><summary>2 hypotheses') == 1  # the first opens, the rest fold
-    assert glance.count('<details class="more"><summary>2 hypotheses') == 1
+    assert glance.count('<details open><summary class="tc-row">') == 1  # only the first hypothesis starts open
+    assert glance.count('<details><summary class="tc-row">') == 3
     assert page.count("Follow this Pack") == 1  # only the Pack they don't follow is offered
 
 
@@ -411,7 +411,7 @@ def test_dashboard_is_plain_a_packs_readings_sit_on_its_card(make_service):
     call(service.el_check, {"item_id": fid})
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index('id="glance"'):page.index('id="evidence"')]
-    assert 'class="chip' in glance and "wrong if" in glance
+    assert 'class="chip' in glance and "Wrong if" in glance
     assert "What your readings show" not in page  # no second card for the same Pack's readings
     assert "Discover → Follow" not in page and "Watchlist <b>" not in page
     assert "new reading" in page and "I&#x27;ve read it" not in page and "I've read it" in page
@@ -436,7 +436,7 @@ def test_pack_card_is_a_checklist():
     page = render(None, [], [watch], followed={"p": record})
     card = page[page.index("thesis-card"):page.index("</section>", page.index("thesis-card"))]
     for part in ("Thesis Pack · CPO", "Lasers are the bottleneck", "H1", "Laser supply is rationed<", "low",
-                 "test 2027-02-10", "wrong if A filing says supply caught up.", 'class="chip', "540,492",
+                 "tested by 2027-02-10", ">Wrong if<", "A filing says supply caught up.", ">Tracks<", 'class="chip', "540,492",
                  "+3.8%", ">Next<", "late: ", "Pack check"):
         assert part in card, part
     assert "EquityLayer Research Pack" not in page
@@ -484,7 +484,7 @@ def test_chain_diagram_lights_thresholds_and_calendar(make_service, tmp_path):
     page, record, watch = page_for("2026-09", 540492)      # the baseline reading judges nothing
     assert 'class="light flat"' in page and 'class="light up"' not in page
     page, _, _ = page_for("2026-10", 480000)               # a later reading below the bar
-    assert 'class="light down"' in page and "weakens if &lt; 501,212" in page and "supports if ≥ 540,492" in page
+    assert 'class="light down"' in page and ">Weakens if<" in page and "LandMark &lt; 501,212" in page and "LandMark ≥ 540,492" in page
     assert "The CPO supply chain · where the theses sit" in page and "A · H1" in page and "not tracked yet" in page
     assert "Part of AI compute, in the network layer." in page and "https://equitylayer.io/themes/ai-compute" in page
     assert "<script" not in page
@@ -516,5 +516,5 @@ def test_card_shows_sources_and_what_moves_if_a_hypothesis_holds():
         {"variable": "v:cohr.us.revenue.quarterly", "name": "Coherent segment revenue", "caveat": "Not CPO alone.",
          "latest": {"period": "FY2027-Q1", "value": 1951.7}, "source_url": "https://www.sec.gov/x"}]}}
     page = render(None, [], [watch], followed={"p": record})
-    assert "✓ if it holds: optical modules gain (per the Pack)" in page
-    assert '<a href="https://www.sec.gov/x">source</a>' in page
+    assert ">If it holds<" in page and "optical modules gain (per the Pack)" in page
+    assert ">Sources<" in page and '<a href="https://www.sec.gov/x">Coherent</a>' in page

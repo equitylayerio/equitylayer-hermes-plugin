@@ -112,7 +112,7 @@ def pack_summary(pack: Any) -> dict | None:
                    if isinstance(w, dict) and isinstance(w.get("variable"), str) and VARIABLE_RE.match(w["variable"])]
         reads = {w["variable"]: {
                      "baseline": (w.get("baseline") or {}).get("period") if isinstance(w.get("baseline"), dict) else None,
-                     "rules": [{"if": str(r.get("if"))[:40], "means": str(r.get("means"))[:40], "say": _clip(r.get("say"), 160)}
+                     "rules": [{"if": str(r.get("if"))[:140], "means": str(r.get("means"))[:40], "say": _clip(r.get("say"), 160)}
                                for r in (w.get("how_to_read") or [])[:6] if isinstance(r, dict) and r.get("if")]}
                  for w in h.get("watches") or [] if isinstance(w, dict) and w.get("variable") in watched}
         variables += [v for v in watched if v not in variables]
@@ -121,6 +121,10 @@ def pack_summary(pack: Any) -> dict | None:
             hyps.append({"statement": _clip(statement, 400), "confidence": h.get("confidence"), "state": h.get("state"),
                          "falsifier": _clip(test.get("falsifier")) if test.get("falsifier") else None,
                          "due": test.get("due"), "variables": watched, "reads": reads,
+                         # The Pack's own one-line point, and the common reading it sets itself against.
+                         "angle": _clip(h.get("angle"), 200) if isinstance(h.get("angle"), str) else None,
+                         "consensus": (_clip(h["common_reading"].get("text"), 200)
+                                       if isinstance(h.get("common_reading"), dict) and h["common_reading"].get("text") else None),
                          # What the Pack says moves if the hypothesis holds; nothing is inferred here.
                          "moves": [{"node": str(m.get("node"))[:60], "effect": str(m.get("effect"))[:20]}
                                    for m in (h.get("where_value_moves") or [])[:4]

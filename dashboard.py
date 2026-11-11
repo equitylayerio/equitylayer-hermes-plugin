@@ -352,43 +352,65 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
             return _band(spec.get("rules") or [], latest.get("value"))
 
         found = [(by_var[v], judged(v)) for v in h.get("variables") or [] if v in by_var]
-        chips = "".join(_var_chip(row, rule) for row, rule in found)
+        chips = '<span class="tc-chips">' + "".join(_var_chip(row, rule) for row, rule in found) + "</span>" if found else ""
         verdicts = [str(rule.get("means")) for _, rule in found if rule]
         light = ("down" if any(m in ("weakens", "fires") for m in verdicts)
                  else "up" if verdicts and all(m == "strengthens" for m in verdicts) else "flat")
         light_text = {"down": "a tracked number weakens it", "up": "tracked numbers support it",
                       "flat": "no verdict yet"}[light]
-        whys = []
-        for row, rule in found:  # why this number, and the thresholds that would support or weaken the hypothesis
-            spec = reads.get(row.get("variable")) if isinstance(reads.get(row.get("variable")), dict) else {}
-            rules = spec.get("rules") or []
-            bars = [f'{MEANS[str(r.get("means"))][1]} if {_cond(r.get("if"))}' for r in rules if str(r.get("means")) in MEANS]
-            why = next((r.get("say") for r in rules if str(r.get("means")) == "strengthens" and r.get("say")), None)
-            if rule and rule.get("say"):
-                why = rule.get("say")
-            text = " · ".join(x for x in ("; ".join(bars[:3]), _clip(why, 120) if why else "") if x)
-            if not text and row.get("caveat"):
-                text = _clip(row.get("caveat"), 140)
-            src = _https(row.get("source_url"))
-            link = f' <a href="{_e(src)}">source</a>' if src else ""
-            if text or link:
-                whys.append(f'<li><b>{_e(_company(row))}</b> {_e(text)}{link}</li>')
-        wrong = h.get("falsifier")
+        # One labelled line per question a reader has: what is tracked, why, what supports it, what breaks it,
+        # what follows if it holds, and when the next number lands.
+        def bars(kind: str) -> str:
+            out = []
+            for row, _ in found:
+                spec = reads.get(row.get("variable")) if isinstance(reads.get(row.get("variable")), dict) else {}
+                cond = next((r.get("if") for r in spec.get("rules") or [] if str(r.get("means")) == kind), None)
+                if cond and str(cond).lstrip()[:1] in "<>=0123456789":
+                    out.append(f"{_company(row)} {_cond(cond)}")
+                elif cond:                      # a condition in words already names who and what
+                    out.append(_clip(cond, 110))
+            return " · ".join(out[:3])
+
+        why = h.get("angle") or next(
+            (r.get("say") for row, _ in found
+             for r in ((reads.get(row.get("variable")) or {}).get("rules") or []) if isinstance(reads.get(row.get("variable")), dict)
+             if str(r.get("means")) == "strengthens" and r.get("say")), None)
+        sources = "".join(f'<a href="{_e(_https(row.get("source_url")))}">{_e(_company(row))}</a>'
+                          for row, _ in found if _https(row.get("source_url")))
+        dates = sorted({str(row.get("next_reading"))[:10] for row, _ in found if len(str(row.get("next_reading") or "")) >= 10})
+        from .harness_store import today_taipei
+        nxt = ""
+        if dates:
+            nxt = dates[0] + (" (late)" if dates[0] < today_taipei() else "")
         moves = "; ".join(f'{str(m.get("node")).split(".")[-1].replace("_", " ")}s {m.get("effect")[:-1]}'
                           for m in h.get("moves") or [] if isinstance(m, dict))
-        hyps += (f'<li class="tc-item"><div class="tc-row"><span class="tc-n">{_e(letter + "·") if letter else ""}H{n}</span>'
-                 f'<span class="light {light}" title="{_e(light_text)}"></span><span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
-                 f'<span class="tc-due">{_e(h.get("confidence") or "")}{" · " if h.get("confidence") and h.get("due") else ""}'
-                 f'{_e(("test " + str(h.get("due"))) if h.get("due") else "")}</span></div>'
-                 + (f'<div class="tc-chips">{chips}</div>' if chips else "")
-                 + (f'<details class="tc-why"><summary>Why these numbers, thresholds and sources</summary><ul>{"".join(whys)}</ul></details>'
-                    if whys else "")
-                 + (f'<div class="tc-holds">✓ if it holds: {_e(moves)} (per the Pack)</div>' if moves else "")
-                 + (f'<div class="tc-wrong" title="{_e(wrong)}">✗ wrong if {_e(_clip(wrong, 110))}</div>' if wrong else "")
-                 + "</li>")
+        wrong = h.get("falsifier")
+
+        def line(key: str, value: str, cls: str = "", raw: bool = False, title: Any = None) -> str:
+            if not value:
+                return ""
+            tip = f' title="{_e(title)}"' if title else ""
+            return (f'<div class="kv {cls}"><span class="k">{_e(key)}</span>'
+                    f'<span class="v"{tip}>{value if raw else _e(value)}</span></div>')
+
+        hyps += (f'<li class="tc-item"><details{" open" if open_ and n == 1 else ""}><summary class="tc-row">'
+                 f'<span class="tc-n">{_e(letter + "·") if letter else ""}H{n}</span>'
+                 f'<span class="light {light}" title="{_e(light_text)}"></span>'
+                 f'<span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
+                 f'<span class="tc-due">{_e(light_text if light != "flat" else "not tested yet")}'
+                 f'{" · confidence " + _e(h.get("confidence")) if h.get("confidence") else ""}</span></summary>'
+                 + line("Most think", _clip(h.get("consensus"), 130))
+                 + line("Why it matters", _clip(why, 130))
+                 + line("Tracks", chips, raw=True)
+                 + line("Supports if", bars("strengthens"), "good")
+                 + line("Weakens if", bars("weakens"), "bad")
+                 + line("Wrong if", _clip(wrong, 120), "bad", title=wrong)
+                 + line("If it holds", moves + " (per the Pack)" if moves else "", "good")
+                 + line("Next", " · ".join(x for x in (f"data {nxt}" if nxt else "", f"tested by {h.get('due')}" if h.get("due") else "") if x))
+                 + line("Sources", sources, "src", raw=True)
+                 + "</details></li>")
     body = f'<ol class="tc-list">{hyps}</ol>' if hyps else ""
-    if compact and body:
-        body = f'<details class="more"{" open" if open_ else ""}><summary>{len(hyp_list)} hypotheses</summary>{body}</details>'
+    # Every hypothesis is one line you can open; only the first one of the first Pack starts open.
     nexts = _next_items(record, rows)
     return (f'<section class="card hero pack thesis-card"><div class="tc-head">'
             + (f'<span class="tc-letter">{_e(letter)}</span>' if letter else "")
@@ -722,8 +744,8 @@ def _chain_3d(theme: str, packs: list[tuple[str, dict, list[dict]]]) -> str:
             + f'<div class="c3-wrap"><svg viewBox="0 0 {width} {height}" role="img" '
             f'aria-label="The {_e(name)} supply chain, the companies tracked at each step, and the hypotheses that track them">'
             f'{"".join(out)}</svg></div><ul class="c3-legend">{legend}</ul>'
-            '<p class="muted small">Left to right, from materials to the systems in the data center. Tall, filled steps '
-            'are where a hypothesis tracks a company; the pin names the Pack and its hypotheses.</p></section>')
+            '<p class="muted small">Materials on the left, data-center systems on the right. Green steps are tracked by '
+            'a hypothesis.</p></section>')
 
 
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
@@ -906,7 +928,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.light{{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;background:var(--nodata)}}.light.up{{background:var(--seen)}}.light.down{{background:var(--against)}}.chip.up{{border-color:var(--seen)}}.chip.down{{border-color:var(--against)}}.tc-holds{{font-size:12.5px;color:var(--seen)}}.tc-why summary{{cursor:pointer;font-size:12px;color:var(--forest-2);margin:2px 0}}.tc-why ul{{margin:4px 0 2px;padding-left:16px;font-size:12.5px;color:var(--muted)}}.tc-cal{{font-size:12.5px}}.c3-wrap{{overflow-x:auto;margin:8px 0 2px}}.chain3d svg{{width:100%;min-width:700px;height:auto;display:block}}.c3-plat{{fill:color-mix(in srgb,var(--forest-2) 7%,var(--paper-bright));stroke:var(--line)}}.c3-plat-side{{fill:var(--line)}}.c3-plat-side.dark{{fill:color-mix(in srgb,var(--line) 78%,#000)}}.c3-shadow{{fill:#000;opacity:.09}}.c3-top.on{{fill:var(--forest-2)}}.c3-left.on{{fill:var(--forest)}}.c3-right.on{{fill:color-mix(in srgb,var(--forest) 78%,#000)}}.c3-top.off{{fill:var(--paper-bright);stroke:var(--line)}}.c3-left.off{{fill:color-mix(in srgb,var(--line) 70%,var(--paper-bright))}}.c3-right.off{{fill:var(--line)}}.c3-top.on,.c3-left.on,.c3-right.on{{stroke:color-mix(in srgb,var(--forest-2) 60%,#fff);stroke-width:.6}}.c3-num{{font:600 11px var(--mono)}}.c3-num.on{{fill:#fff}}.c3-num.off{{fill:var(--muted)}}.c3-flow{{stroke:var(--gold);stroke-width:1.6;fill:none}}.c3-flow-head{{fill:var(--gold)}}.c3-pin{{stroke:var(--gold);stroke-width:1.4}}.c3-pill{{fill:var(--gold)}}.c3-pill-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-label{{font:500 11.5px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-label{{font:500 11px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-arrow{{font:14px var(--body);fill:var(--gold)}}.c3-co{{font:11px var(--body);fill:var(--forest-2)}}.c3-co.none{{fill:var(--muted);font-style:italic}}.c3-gloss{{margin:2px 0 0;font-size:14px}}.c3-mark{{fill:var(--gold)}}.c3-mark-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-legend{{list-style:none;margin:4px 0 6px;padding:0;font-size:13.5px;display:grid;gap:2px}}.c3-legend b{{display:inline-block;min-width:20px;margin-right:6px;padding:0 6px;border-radius:9px;background:var(--gold);color:#1b1b1b;font:600 11px/18px var(--mono);text-align:center}}.tc-letter{{font:600 12px var(--mono);background:var(--forest-2);color:#fff;border-radius:6px;padding:1px 7px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.light{{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;background:var(--nodata)}}.light.up{{background:var(--seen)}}.light.down{{background:var(--against)}}.chip.up{{border-color:var(--seen)}}.chip.down{{border-color:var(--against)}}.kv{{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;font-size:13px;line-height:1.45;margin-top:3px}}.kv .k{{font:500 10px/1.9 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}}.kv.good .v{{color:var(--seen)}}.kv.bad .v{{color:var(--against)}}.kv .v{{overflow:hidden;text-overflow:ellipsis}}.kv .tc-chips{{margin:0}}.kv.src .v a{{margin-right:10px;font-size:12.5px}}.tc-item{{padding-bottom:2px}}.tc-item summary{{cursor:pointer;list-style:none}}.tc-item summary::-webkit-details-marker{{display:none}}.tc-item details[open] summary{{margin-bottom:4px}}.tc-item summary .tc-n::before{{content:'▸ ';color:var(--muted)}}.tc-item details[open] summary .tc-n::before{{content:'▾ '}}.tc-holds{{font-size:12.5px;color:var(--seen)}}.tc-why summary{{cursor:pointer;font-size:12px;color:var(--forest-2);margin:2px 0}}.tc-why ul{{margin:4px 0 2px;padding-left:16px;font-size:12.5px;color:var(--muted)}}.tc-cal{{font-size:12.5px}}.c3-wrap{{overflow-x:auto;margin:8px 0 2px}}.chain3d svg{{width:100%;min-width:700px;height:auto;display:block}}.c3-plat{{fill:color-mix(in srgb,var(--forest-2) 7%,var(--paper-bright));stroke:var(--line)}}.c3-plat-side{{fill:var(--line)}}.c3-plat-side.dark{{fill:color-mix(in srgb,var(--line) 78%,#000)}}.c3-shadow{{fill:#000;opacity:.09}}.c3-top.on{{fill:var(--forest-2)}}.c3-left.on{{fill:var(--forest)}}.c3-right.on{{fill:color-mix(in srgb,var(--forest) 78%,#000)}}.c3-top.off{{fill:var(--paper-bright);stroke:var(--line)}}.c3-left.off{{fill:color-mix(in srgb,var(--line) 70%,var(--paper-bright))}}.c3-right.off{{fill:var(--line)}}.c3-top.on,.c3-left.on,.c3-right.on{{stroke:color-mix(in srgb,var(--forest-2) 60%,#fff);stroke-width:.6}}.c3-num{{font:600 11px var(--mono)}}.c3-num.on{{fill:#fff}}.c3-num.off{{fill:var(--muted)}}.c3-flow{{stroke:var(--gold);stroke-width:1.6;fill:none}}.c3-flow-head{{fill:var(--gold)}}.c3-pin{{stroke:var(--gold);stroke-width:1.4}}.c3-pill{{fill:var(--gold)}}.c3-pill-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-label{{font:500 11.5px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-label{{font:500 11px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-arrow{{font:14px var(--body);fill:var(--gold)}}.c3-co{{font:11px var(--body);fill:var(--forest-2)}}.c3-co.none{{fill:var(--muted);font-style:italic}}.c3-gloss{{margin:2px 0 0;font-size:14px}}.c3-mark{{fill:var(--gold)}}.c3-mark-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-legend{{list-style:none;margin:4px 0 6px;padding:0;font-size:13.5px;display:grid;gap:2px}}.c3-legend b{{display:inline-block;min-width:20px;margin-right:6px;padding:0 6px;border-radius:9px;background:var(--gold);color:#1b1b1b;font:600 11px/18px var(--mono);text-align:center}}.tc-letter{{font:600 12px var(--mono);background:var(--forest-2);color:#fff;border-radius:6px;padding:1px 7px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
 
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
@@ -1005,6 +1027,7 @@ JSON_FORMAT = "equitylayer-hermes-dashboard/1"
 def _reading(row: dict) -> dict:
     latest = row.get("latest") or {}
     return {"variable": row.get("variable"), "name": row.get("name"), "company": _company(row),
+            "entity": row.get("entity"),
             "period": latest.get("period"), "value": latest.get("value"), "unit": row.get("unit"),
             "withheld": latest.get("withheld"), "change": row.get("change") or None,
             "next_reading": row.get("next_reading"), "caveat": row.get("caveat"), "source_url": row.get("source_url")}
