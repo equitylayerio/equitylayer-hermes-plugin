@@ -168,6 +168,9 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
                  if fetched_at else None)
         page = dashboard_page.render(self._profile_store_factory().get(), theses, watchlists, preview=preview,
                                      saved_at=str(target), packs=packs, followed=followed, packs_as_of=as_of)
+        # The same facts as data, so the person's other agents can read them without parsing the page.
+        dashboard_page.write_json(self._dashboard_root(),
+                                  dashboard_page.snapshot(theses, watchlists, followed=followed, packs=packs))
         return dashboard_page.write(self._dashboard_root(), page)
 
     # The last registry this plugin saw, so the dashboard can say which Research Packs are published.
@@ -247,7 +250,8 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             # in the chat itself rather than only under Artifacts.
             "markdown": (f"Your dashboard: what you follow, what needs you, recent events and what is due next, "
                          f"built on this machine.\n\n::preview{{file=\"{path}\" height=\"560\"}}\n\n"
-                         f"It is saved at `{path}`. Reopen it any time with `/el dashboard` or from Artifacts."),
+                         f"It is saved at `{path}`. Reopen it any time with `/el dashboard` or from Artifacts. "
+                         f"The same facts as data, for other agents: `{path.parent / dashboard_page.JSON_NAME}`."),
         }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:

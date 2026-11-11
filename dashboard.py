@@ -727,6 +727,86 @@ td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{
 """
 
 
+JSON_NAME = "dashboard.json"
+JSON_FORMAT = "equitylayer-hermes-dashboard/1"
+
+
+def _reading(row: dict) -> dict:
+    latest = row.get("latest") or {}
+    return {"variable": row.get("variable"), "name": row.get("name"), "company": _company(row),
+            "period": latest.get("period"), "value": latest.get("value"), "unit": row.get("unit"),
+            "withheld": latest.get("withheld"), "change": row.get("change") or None,
+            "next_reading": row.get("next_reading"), "caveat": row.get("caveat"), "source_url": row.get("source_url")}
+
+
+def snapshot(theses: list[dict], watchlists: list[dict], followed: dict[str, dict] | None = None,
+             packs: list[dict] | None = None, now: datetime | None = None) -> dict:
+    """The dashboard as data, for agents: the same facts as the page, read from the same local files."""
+    followed = followed or {}
+    stamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).isoformat(timespec="seconds")
+    rank = {p.get("id"): n for n, p in enumerate(packs or []) if isinstance(p, dict)}
+    watch_by_id = {w.get("id"): w for w in watchlists}
+    linked = set()
+    out_packs = []
+    for pid, record in sorted(followed.items(), key=lambda kv: rank.get(kv[0], len(rank))):
+        summary = record.get("pack") if isinstance(record.get("pack"), dict) else {}
+        watch = watch_by_id.get(record.get("readings_id")) or {}
+        if watch:
+            linked.add(watch.get("id"))
+        rows = [r for r in ((watch.get("last_check") or {}).get("rows") or []) if isinstance(r, dict)]
+        by_var = {r.get("variable"): r for r in rows}
+        pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
+        status = ("not_published" if record.get("unavailable_since") else
+                  ("revision_to_review" if pending and pending.get("revision_changed") else
+                   ("new_data_to_read" if pending else "current")))
+        out_packs.append({
+            "item_id": record.get("follow_id"), "pack_id": pid, "category": summary.get("category"),
+            "theme_id": summary.get("theme_id"), "title": summary.get("title"), "view": summary.get("view"),
+            "url": _https(summary.get("url")), "revision": summary.get("revision"), "status": status,
+            "next_check": record.get("next_check_at") or record.get("fresh_until"),
+            "hypotheses": [{
+                "id": f"H{n}", "claim": _short_claim(h.get("statement")), "statement": h.get("statement"),
+                "confidence": h.get("confidence"), "test_by": h.get("due"), "wrong_if": h.get("falsifier"),
+                "tracks": [_reading(by_var[v]) if v in by_var else {"variable": v} for v in h.get("variables") or []],
+            } for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1)],
+            "readings_unread": isinstance(watch.get("pending"), dict),
+        })
+    own = []
+    for record in theses:
+        harness = record.get("harness") if isinstance(record.get("harness"), dict) else {}
+        last = record.get("last_check") if isinstance(record.get("last_check"), dict) else {}
+        own.append({"item_id": record.get("id"), "title": record.get("title"), "hypothesis": harness.get("hypothesis"),
+                    "counts": last.get("counts"), "wrong_if_fired": last.get("wrong_if_fired") or [],
+                    "needs_human": last.get("needs_human"), "next_check": last.get("next_due"),
+                    "unread": isinstance(record.get("pending_baseline"), dict)})
+    readings = [{"item_id": w.get("id"), "title": w.get("title"), "theme": w.get("theme"),
+                 "unread": isinstance(w.get("pending"), dict),
+                 "next_check": (w.get("last_check") or {}).get("next_due"),
+                 "readings": [_reading(r) for r in ((w.get("last_check") or {}).get("rows") or []) if isinstance(r, dict)]}
+                for w in watchlists if w.get("id") not in linked]
+    return {"format": JSON_FORMAT, "generated_at": stamp, "equitylayer_packs": out_packs, "your_theses": own,
+            "readings": readings,
+            "note": "Built on this machine from local files. Research evidence, not a trade instruction. "
+                    "Not investment advice."}
+
+
+def write_json(root: Path, data: dict) -> Path:
+    import json
+
+    path = Path(root) / JSON_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=1)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return path
+
+
 def write(root: Path, page: str) -> Path:
     path = Path(root) / FILE_NAME
     path.parent.mkdir(parents=True, exist_ok=True)

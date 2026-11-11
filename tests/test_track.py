@@ -440,3 +440,20 @@ def test_pack_card_is_a_checklist():
                  "+3.8%", ">Next<", "late: ", "Pack check"):
         assert part in card, part
     assert "EquityLayer Research Pack" not in page
+
+
+
+def test_dashboard_json_has_the_same_facts_for_agents(make_service, tmp_path):
+    service, _, store = make_service(PACK_ROUTES)
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    call(service.el_check, {"item_id": fid})
+    rendered = call(service.el_dashboard_render)
+    assert "dashboard.json" in rendered["markdown"]
+    data = json.loads((tmp_path / "dashboard.json").read_text())
+    assert data["format"] == "equitylayer-hermes-dashboard/1"
+    pack = data["equitylayer_packs"][0]
+    assert pack["item_id"] == fid and pack["pack_id"] == PACK_ID and len(pack["hypotheses"]) == 3
+    h1 = pack["hypotheses"][0]
+    assert h1["id"] == "H1" and h1["wrong_if"] and h1["test_by"] and h1["tracks"][0]["variable"].startswith("v:")
+    assert data["readings"] == []  # a Pack's readings live under the Pack, not twice
+    assert "Not investment advice." in data["note"]
