@@ -249,7 +249,8 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True) -> str:
                   f"{below}.</p>")
     url = _https(summary.get("url"))
     link = f'<p><a class="go" href="{_e(url)}">Read the full Pack on equitylayer.io →</a></p>' if url else ""
-    return (f'<section class="card hero pack"><p class="eyebrow">EquityLayer thesis' + (f" · {_e(label)}" if label else "")
+    head = "EquityLayer tracking Pack" if summary.get("category") == "tracking" else "EquityLayer thesis"
+    return (f'<section class="card hero pack"><p class="eyebrow">{head}' + (f" · {_e(label)}" if label else "")
             + f' · you follow it</p><h3>{_e(summary.get("title"))}</h3>'
             + (f'<p class="hero-text pack-view">{_e(summary.get("view"))}</p>' if summary.get("view") else "")
             + ((f'<details class="more"{" open" if open_ else ""}><summary>{len(summary.get("hypotheses") or [])} '
@@ -340,6 +341,8 @@ def _clip(text: Any, limit: int = 280) -> str:
 
 
 PACK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,99}$")
+# EquityLayer's Pack categories (closed list). No field means a thesis Pack, but the label shows only when given.
+CATEGORY_LABELS = {"thesis": "Thesis Pack", "tracking": "Tracking Pack"}
 
 
 def _pack_id(value: Any) -> str | None:
@@ -410,7 +413,8 @@ def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str,
 
 def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str = "") -> str:
     state = "you follow it" if follow is not None else "published"
-    eyebrow = "EquityLayer Research Pack" + (f" · {label}" if label else "") + f" · {state}"
+    kind = CATEGORY_LABELS.get(entry.get("category") or ((follow or {}).get("pack") or {}).get("category"))
+    eyebrow = "EquityLayer Research Pack" + (f" · {kind}" if kind else "") + (f" · {label}" if label else "") + f" · {state}"
     parts = [f'<section class="card pack"><p class="eyebrow">{_e(eyebrow)}</p>',
              f'<h3>{_e(entry.get("title") or entry.get("id"))}</h3>']
     if entry.get("view"):
@@ -508,10 +512,16 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                       and p.get("theme_id") == preview.get("theme") and p.get("status") == "verified"
                       and p.get("access") == "public" and _pack_id(p.get("id")) and p.get("id") not in followed]
         pack = open_packs[0] if open_packs else None
-        follow_label = ("Follow EquityLayer's Research Pack" if len(open_packs) == 1
-                        else f"Follow EquityLayer's Research Packs ({len(open_packs)})")
-        follow_send = ("I'd like to follow EquityLayer's Research Pack. Show me its card first." if len(open_packs) == 1
-                       else "I'd like to follow EquityLayer's Research Packs. Show me their card first.")
+        theses = [p for p in open_packs if p.get("category") == "thesis"]
+        if theses:  # with categories, the recommendation is EquityLayer's thesis Packs
+            follow_label = ("Follow EquityLayer's thesis Pack" if len(theses) == 1
+                            else f"Follow EquityLayer's thesis Packs ({len(theses)})")
+            follow_send = "I'd like to follow EquityLayer's thesis Packs. Show me their card first."
+        else:
+            follow_label = ("Follow EquityLayer's Research Pack" if len(open_packs) == 1
+                            else f"Follow EquityLayer's Research Packs ({len(open_packs)})")
+            follow_send = ("I'd like to follow EquityLayer's Research Pack. Show me its card first." if len(open_packs) == 1
+                           else "I'd like to follow EquityLayer's Research Packs. Show me their card first.")
         readings_class = ' class="ghost"' if pack else ""
         actions = ('<div class="actions">'
                    + (f'<button type="button" data-hermes-send="{_e(follow_send)}">{_e(follow_label)}</button>'

@@ -119,6 +119,7 @@ def pack_summary(pack: Any) -> dict | None:
     return {"pack_id": pack.get("pack_id"), "title": _clip(cite.get("title") or pack.get("title") or pack.get("pack_id"), 200),
             "view": _clip(pack.get("view"), 400) if pack.get("view") else None, "theme_id": pack.get("theme_id"),
             "revision": pack.get("revision") or pack.get("pack_version"), "as_of": pack.get("as_of"), "url": url,
+            "category": pack.get("category") if pack.get("category") in ("thesis", "tracking") else None,
             "hypotheses": hyps[:6], "variables": variables[:8]}
 
 

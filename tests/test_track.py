@@ -360,3 +360,24 @@ def test_followed_packs_keep_the_registry_order():
     order = [page.index(f"Title {pid}") for pid in ("cpo-laser-inp-test-bottleneck", "cpo-timing-and-form",
                                                     "taiwan-optical-revenue-vs-cpo-guidance")]
     assert order == sorted(order)
+
+
+
+def test_pack_categories_label_cards_and_put_thesis_packs_first():
+    from equitylayer_plugin.dashboard import render
+
+    packs = [{"id": pid, "kind": "pack", "title": pid, "theme_id": "optical_cpo", "status": "verified",
+              "access": "public", "category": cat}
+             for pid, cat in (("cpo-laser-inp-test-bottleneck", "thesis"), ("cpo-timing-and-form", "thesis"),
+                              ("taiwan-optical-revenue-vs-cpo-guidance", "tracking"))]
+    preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
+    page = render(None, [], [], preview=preview, packs=packs, followed={})
+    assert "Follow EquityLayer&#x27;s thesis Packs (2)" in page
+    assert page.count("EquityLayer Research Pack · Thesis Pack · CPO") == 2
+    assert page.count("EquityLayer Research Pack · Tracking Pack · CPO") == 1
+    assert page.index("cpo-laser-inp-test-bottleneck") < page.index("taiwan-optical-revenue-vs-cpo-guidance")
+    for p in packs:
+        p.pop("category")
+    page = render(None, [], [], preview=preview, packs=packs, followed={})  # before the field ships: no label
+    assert "Thesis Pack" not in page and "Tracking Pack" not in page
+    assert "Follow EquityLayer&#x27;s Research Packs (3)" in page

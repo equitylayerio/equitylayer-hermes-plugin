@@ -174,6 +174,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
     def _save_pack_index(self, entries: Any) -> list[dict]:
         rows = [{"id": e.get("id"), "kind": e.get("kind"), "title": e.get("title"), "theme_id": e.get("theme_id"),
                  "status": e.get("status"), "access": e.get("access"), "view": e.get("view"),
+                 "category": e.get("category") if e.get("category") in ("thesis", "tracking") else None,
                  "url": (e.get("cite_as") or {}).get("url") if isinstance(e.get("cite_as"), dict) else None}
                 for e in entries or [] if isinstance(e, dict) and e.get("id")]
         path = self._dashboard_root() / PACK_INDEX
