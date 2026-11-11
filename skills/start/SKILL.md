@@ -37,7 +37,11 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
 
 Offer the four `sectors` from `el_profile`, in order, with their status, CPO recommended. Gloss the one they pick.
 
-**Before decision 2, show what is live.** Call `el_plan` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme. Pick the three most informative candidates and call `el_get_variable` on each. Use the candidate's `category` to mix what the readings tell: demand (segment revenue or management statements), capacity (capex), pricing (gross margin), and Taiwan monthly revenue for a high-frequency pulse. Total revenue alone is coarse; don't show three revenue lines. Show each in one plain line:
+**Before decision 2, lead with EquityLayer's theses.** If the registry lists published Packs for the sector, call `el_research_pack` (action `read`) for each and show them first, in the registry's order (thesis Packs first). For each, two plain lines:
+- its title, as the thesis it holds (with "Thesis Pack" or "Tracking Pack" when the registry gives `category`);
+- its view in one sentence, and how many hypotheses it tests.
+
+**Then show the evidence that is live, as support for those theses.** With Packs, take the three readings from the variables the Packs watch (their `watches`), one per Pack where you can, and say which thesis each one bears on. Without Packs, call `el_plan` with the sector's English label from the options as the thesis text (it needs at least 8 characters) and its theme, and pick the three most informative candidates. Call `el_get_variable` on each. Use the candidate's `category` to mix what the readings tell: demand (segment revenue or management statements), capacity (capex), pricing (gross margin), and Taiwan monthly revenue for a high-frequency pulse. Total revenue alone is coarse; don't show three revenue lines. Show each in one plain line:
 - what the company does (`company_role`, from the company's own description, when the tool returns one);
 - the latest reading and its period, and what kind of signal it is (demand, capacity, pricing or revenue pulse);
 - what it shows;
@@ -45,7 +49,7 @@ Offer the four `sectors` from `el_profile`, in order, with their status, CPO rec
 
 A withheld value is no data: say why, and never guess it.
 
-Then call `el_dashboard_render` with `preview_variables` (up to eight candidates that cover different companies, chain steps and signal types, including those three), `preview_title` ("<sector> live readings") and `preview_theme`. Copy its `::preview{...}` line exactly, on a line of its own, so the dashboard shows inside the chat, and say nothing is saved until they say yes. Its buttons send the decision 2 answer for them.
+Then call `el_dashboard_render` with `preview_variables` (up to eight readings that cover different companies, chain steps and signal types, including those three; with Packs, the variables they watch first), `preview_title` ("<sector> live readings") and `preview_theme`. Copy its `::preview{...}` line exactly, on a line of its own, so the dashboard shows inside the chat, and say nothing is saved until they say yes. Its buttons send the decision 2 answer for them.
 
 **If the sector has no live readings yet** (the plan returns no candidates, as space does today), say so in one line and ask instead:
 1. Pick another sector (recommended).

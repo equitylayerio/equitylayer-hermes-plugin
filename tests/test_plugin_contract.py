@@ -105,7 +105,7 @@ def test_start_skill_offers_the_websites_sectors_in_order():
                    "1. Follow the curated readings (recommended)",
                    "On yes, call `el_track` with the title", "On yes, call `el_track` with the harness",
                    "el_dashboard_render", "call `el_track` with that `item_id` and the harness",
-                   "Before decision 2, show what is live"):
+                   "Before decision 2, lead with EquityLayer's theses", "Then show the evidence that is live, as support for those theses"):
         assert phrase in text
 
 
@@ -121,7 +121,9 @@ def test_start_skill_defaults_to_english_and_introduces_equitylayer_briefly():
 def test_dashboard_preview_comes_with_the_live_readings():
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
     preview = text.index("Then call `el_dashboard_render` with `preview_variables`")
-    assert text.index("Before decision 2, show what is live") < preview < text.index("## Decision 2.")
+    theses = text.index("Before decision 2, lead with EquityLayer's theses")
+    evidence = text.index("Then show the evidence that is live, as support for those theses")
+    assert theses < evidence < preview < text.index("## Decision 2.")  # theses first, readings as their evidence
     first_check = text.index("**Then check once:**")
     assert first_check < text.index("Then call `el_dashboard_render` (no preview now)") < text.index("## Decision 4.")
 
