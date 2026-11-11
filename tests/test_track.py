@@ -193,8 +193,8 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
 
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index("At a glance"):page.index("Evidence")]
-    assert "EquityLayer thesis · CPO and optical networking · you follow it" in glance
-    assert "Would be wrong if:" in glance and "LandMark, a laser epi supplier" in glance
+    assert "Thesis Pack · CPO · you follow it" in glance
+    assert "Wrong if" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
     assert "Readings for: What Taiwan&#x27;s optical" in page[page.index("Evidence"):]
 
@@ -237,7 +237,7 @@ def test_new_data_for_a_pack_is_read_with_its_readings_and_a_new_revision_is_not
     assert "A new version is published" not in check["markdown"]
     assert store.get(fid)["pending_review"]["revision_changed"] is False
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
-    assert "New data in its readings" in page and "tell Hermes you've read it" in page
+    assert "new data to read" in page and "tell Hermes you've read it" in page
     seen = call(service.el_seen, {"item_id": fid})
     assert seen["ok"] and "baseline moved to the new data" in seen["markdown"]
     new_id = [f for f in (tmp_path / "follows").iterdir()][0].stem
@@ -288,14 +288,14 @@ def test_several_packs_in_one_sector(make_service):
     # The button answers decision 2 only: the card and the person's yes still come before anything is followed.
     assert 'data-hermes-send="I&#x27;d like to follow EquityLayer&#x27;s Research Packs. Show me their card first."' in page
     assert "Yes, follow EquityLayer" not in page
-    assert page.count("EquityLayer Research Pack · CPO and optical networking · published") == 3
+    assert page.count("Research Pack · CPO and optical networking · published") == 3
 
     followed = {pid: {"follow_id": "follow_" + str(n) * 32, "target_id": pid, "pack": summary(pid, f"Pack {n}"),
                       "next_check_at": "2026-11-12"}
                 for n, pid in enumerate(("cpo-timing-and-form", "cpo-laser-inp-test-bottleneck"), 1)}
     page = render(None, [], [], packs=packs, followed=followed)
     glance = page[page.index("At a glance"):]
-    assert glance.count("EquityLayer thesis · CPO and optical networking · you follow it") == 2
+    assert glance.count("Thesis Pack · CPO · you follow it") == 2
     assert glance.count('<details class="more" open><summary>2 hypotheses') == 1  # the first opens, the rest fold
     assert glance.count('<details class="more"><summary>2 hypotheses') == 1
     assert page.count("Follow this Pack") == 1  # only the Pack they don't follow is offered
@@ -332,8 +332,8 @@ def test_dashboard_caps_pack_heroes_at_four():
                                        "hypotheses": [{"statement": "h", "confidence": "low"}]}}
                 for n in range(1, 6)}
     page = render(None, [], [], followed=followed)
-    assert page.count("EquityLayer thesis · CPO and optical networking · you follow it") == 4
-    assert page.count("EquityLayer Research Pack · you follow it") == 1  # the fifth still shows, as a card
+    assert page.count("Thesis Pack · CPO · you follow it") == 4
+    assert page.count("Research Pack · you follow it") == 1  # the fifth still shows, as a card
 
 
 def test_pack_readings_titles_fit():
@@ -373,8 +373,8 @@ def test_pack_categories_label_cards_and_put_thesis_packs_first():
     preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
     page = render(None, [], [], preview=preview, packs=packs, followed={})
     assert "Follow EquityLayer&#x27;s thesis Packs (2)" in page
-    assert page.count("EquityLayer Research Pack · Thesis Pack · CPO") == 2
-    assert page.count("EquityLayer Research Pack · Tracking Pack · CPO") == 1
+    assert page.count("Thesis Pack · CPO") == 2
+    assert page.count("Tracking Pack · CPO") == 1
     assert page.index("cpo-laser-inp-test-bottleneck") < page.index("taiwan-optical-revenue-vs-cpo-guidance")
     for p in packs:
         p.pop("category")
@@ -391,7 +391,7 @@ def test_preview_puts_the_theses_before_the_live_readings():
               "status": "verified", "access": "public", "category": "thesis"}]
     preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
     page = render(None, [], [], preview=preview, packs=packs, followed={})
-    assert page.index("EquityLayer Research Pack · Thesis Pack") < page.index('<h2 id="live">')
+    assert page.index("Thesis Pack · CPO and optical networking") < page.index('<h2 id="live">')
     assert page.index("EquityLayer's research for this sector") < page.index('<h2 id="live">')
     assert "Your thesis" not in page  # a thesis Pack is EquityLayer's, never shown as the person's own
 
@@ -416,3 +416,27 @@ def test_dashboard_is_plain_a_packs_readings_sit_on_its_card(make_service):
     assert "Discover → Follow" not in page and "Watchlist <b>" not in page
     assert "new reading" in page and "I&#x27;ve read it" not in page and "I've read it" in page
     assert '<details class="row-more"><summary>About this reading</summary>' in page
+
+
+
+def test_pack_card_is_a_checklist():
+    from equitylayer_plugin.dashboard import render
+
+    record = {"follow_id": "follow_" + "1" * 32, "target_id": "p", "next_check_at": "2026-11-12", "readings_id": "r",
+              "pack": {"title": "Lasers are the bottleneck", "view": "Short view.", "theme_id": "optical_cpo",
+                       "category": "thesis", "hypotheses": [
+                           {"statement": "Laser supply is rationed: long explanation", "confidence": "low",
+                            "due": "2027-02-10", "falsifier": "A filing says supply caught up.",
+                            "variables": ["v:3081.two.revenue.monthly"]}]}}
+    watch = {"id": "r", "title": "CPO Pack readings: Lasers", "follow_id": record["follow_id"], "theme": "optical_cpo",
+             "last_check": {"as_of": "2026-11-11", "rows": [
+                 {"variable": "v:3081.two.revenue.monthly", "name": "LandMark monthly revenue", "unit": "TWD thousand",
+                  "latest": {"period": "2026-09", "value": 540492}, "change": "+3.8% vs 2026-08",
+                  "next_reading": "2026-01-01", "entity": "3081.TWO"}]}}
+    page = render(None, [], [watch], followed={"p": record})
+    card = page[page.index("thesis-card"):page.index("</section>", page.index("thesis-card"))]
+    for part in (">Thesis<", "Lasers are the bottleneck", "H1", "Laser supply is rationed<", "confidence low",
+                 "tested by 2027-02-10", "Wrong if", "A filing says supply caught up.", "Tracks",
+                 "LandMark monthly revenue", "540,492", ">Next<", "data was due, not in yet", "Hermes checks this Pack"):
+        assert part in card, part
+    assert "EquityLayer Research Pack" not in page

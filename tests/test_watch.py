@@ -174,7 +174,7 @@ def test_dashboard_says_where_it_lives_and_links_the_sector_page(make_service, t
     assert "Reopen it any time with `/el dashboard`" in rendered["markdown"]
     page = open(rendered["artifact_file"], encoding="utf-8").read()
     assert str(tmp_path / "dashboard.html") in page
-    assert 'href="https://equitylayer.io/sectors/cpo"' in page and "EquityLayer Research Pack" in page
+    assert 'href="https://equitylayer.io/sectors/cpo"' in page and "Research Pack · CPO and optical networking" in page
     assert ">Revenue pulse<" in page
 
 
@@ -207,7 +207,7 @@ def _page(service, args=None):
 def test_dashboard_offers_the_published_cpo_pack(make_service):
     service, transport, _ = make_service({**ROUTES, "list_registry": "list_registry_cpo"})
     page = _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
-    assert "EquityLayer Research Pack · CPO and optical networking · published" in page
+    assert "Research Pack · CPO and optical networking · published" in page
     assert "What Taiwan&#x27;s optical suppliers report" in page and "none of nine suppliers" in page
     assert f'data-hermes-send="Follow the EquityLayer Research Pack {PACK_ID}."' in page
     assert f"https://equitylayer.io/research/packs/{PACK_ID}" in page and "in preparation" not in page
@@ -222,7 +222,7 @@ def test_dashboard_shows_a_followed_pack_even_with_nothing_else_tracked(make_ser
     store.save(build_record({"follow_id": "follow_" + "a" * 32, "pack_id": PACK_ID, "fresh_until": "2026-11-17"}))
     page = _page(service)
     assert "Nothing tracked yet" not in page
-    assert "EquityLayer Research Pack · CPO and optical networking · you follow it" in page and "next check 2026-11-17" in page
+    assert "Research Pack · CPO and optical networking · you follow it" in page and "next check 2026-11-17" in page
     assert "Follow this Pack" not in page
 
 
@@ -272,5 +272,5 @@ def test_a_corrupt_registry_cache_does_not_break_the_dashboard(make_service):
     root.mkdir(parents=True, exist_ok=True)
     (root / "packs.json").write_text('{"fetched_at": "soon", "entries": []}', encoding="utf-8")
     page = _page(service, {"preview_variables": [FOCI], "preview_theme": "optical_cpo"})
-    assert "EquityLayer Research Pack · CPO and optical networking · published" in page and "Registry as of" in page
+    assert "Research Pack · CPO and optical networking · published" in page and "Registry as of" in page
     assert not list(root.glob(".tmp-*"))
