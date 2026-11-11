@@ -567,3 +567,9 @@ def test_dashboard_json_carries_a_signal_per_hypothesis():
     assert hypothesis_signal(h, {"v:a.us.revenue.quarterly": {"latest": {"period": "2026-Q3", "value": 120}}}) == "no_verdict"
     assert hypothesis_signal(h, {"v:a.us.revenue.quarterly": {"latest": {"period": "2026-Q4", "value": 120}}}) == "supports"
     assert hypothesis_signal(h, {"v:a.us.revenue.quarterly": {"latest": {"period": "2026-Q4", "value": 80}}}) == "weakens"
+    two = {"variables": ["v:a.us.revenue.quarterly", "v:b.us.revenue.quarterly"], "reads": {
+        "v:a.us.revenue.quarterly": h["reads"]["v:a.us.revenue.quarterly"],
+        "v:b.us.revenue.quarterly": {"baseline": "2026-Q3", "rules": [{"if": ">= 5", "means": "strengthens"}]}}}
+    by_var = {"v:a.us.revenue.quarterly": {"latest": {"period": "2026-Q4", "value": 120}},
+              "v:b.us.revenue.quarterly": {"latest": {"period": "2026-Q3", "value": 9}}}   # b is still at its baseline
+    assert hypothesis_signal(two, by_var) == "partly_supports"
