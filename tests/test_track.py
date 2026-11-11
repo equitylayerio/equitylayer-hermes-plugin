@@ -521,3 +521,20 @@ def test_card_shows_sources_and_what_moves_if_a_hypothesis_holds():
     summary["hypotheses"][0]["moves"] = []
     page = render(None, [], [watch], followed={"p": record})
     assert "not stated in the Pack yet" in page and "If it fails" not in page  # nothing is inferred
+
+
+
+def test_core_hypotheses_lead_and_the_rest_fold():
+    from equitylayer_plugin.dashboard import render
+
+    def hyp(text, role):
+        return {"statement": text, "confidence": "low", "due": "2027-02-10", "falsifier": "x", "role": role, "variables": []}
+
+    record = {"follow_id": "follow_" + "1" * 32, "target_id": "p",
+              "pack": {"title": "T", "theme_id": "optical_cpo", "category": "thesis",
+                       "hypotheses": [hyp("Core claim", "core"), hyp("Supporting check", "supporting"), hyp("A risk", "risk")]}}
+    page = render(None, [], [], followed={"p": record})
+    card = page[page.index("thesis-card"):]
+    assert card.index("Core claim") < card.index("+ 1 supporting · 1 risk") < card.index("Supporting check")
+    assert "not tested yet" not in page and "confidence low</span></summary>" not in page
+    assert "confidence low" in page  # still there, inside the opened list

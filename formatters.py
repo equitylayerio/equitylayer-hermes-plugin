@@ -123,6 +123,7 @@ def pack_summary(pack: Any) -> dict | None:
                          "due": test.get("due"), "variables": watched, "reads": reads,
                          # The Pack's own one-line point, and the common reading it sets itself against.
                          "angle": _clip(h.get("angle"), 200) if isinstance(h.get("angle"), str) else None,
+                         "role": h.get("role") if h.get("role") in ("core", "supporting", "risk") else "core",
                          "consensus": (_clip(h["common_reading"].get("text"), 200)
                                        if isinstance(h.get("common_reading"), dict) and h["common_reading"].get("text") else None),
                          # What the Pack says moves if the hypothesis holds; nothing is inferred here.
