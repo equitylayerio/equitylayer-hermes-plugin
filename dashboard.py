@@ -28,6 +28,7 @@ SECTOR_PAGES = {
 }
 SITE = "https://equitylayer.io"
 PACK_PAGE = "https://equitylayer.io/research/packs/"
+AI_COMPUTE_MAP = "https://equitylayer.io/themes/ai-compute"
 STATUS_TEXT = {"seen": "seen", "against": "against", "late": "late", "no_data": "no data", "not_due": "not due"}
 
 
@@ -243,7 +244,47 @@ def _short_claim(text: Any, limit: int = 130) -> str:
     return _clip(head, limit)
 
 
-def _var_chip(row: dict) -> str:
+def _band(rules: list[dict], value: Any) -> dict | None:
+    """Which of a Pack's reading rules the latest value falls in: '>= x', '> x', '<= x', '< x' or 'a..b'."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    for rule in rules or []:
+        cond = str(rule.get("if") or "").replace(",", "").strip()
+        try:
+            if ".." in cond:
+                lo, hi = (float(x) for x in cond.split("..", 1))
+                hit = lo <= v <= hi
+            elif cond.startswith(">="):
+                hit = v >= float(cond[2:])
+            elif cond.startswith("<="):
+                hit = v <= float(cond[2:])
+            elif cond.startswith(">"):
+                hit = v > float(cond[1:])
+            elif cond.startswith("<"):
+                hit = v < float(cond[1:])
+            else:
+                continue
+        except ValueError:
+            continue
+        if hit:
+            return rule
+    return None
+
+
+MEANS = {"strengthens": ("up", "supports"), "weakens": ("down", "weakens"), "fires": ("down", "breaks")}
+
+
+def _cond(cond: Any) -> str:
+    """A rule's condition with readable numbers: '>= 540492' becomes '≥ 540,492'."""
+    import re as _re
+
+    text = str(cond or "").replace("..", " to ").replace(">=", "≥ ").replace("<=", "≤ ")
+    return _re.sub(r"\d{4,}(?:\.\d+)?", lambda m: _num(float(m.group(0))), text).replace("  ", " ").strip()
+
+
+def _var_chip(row: dict, rule: dict | None = None) -> str:
     """A tracked variable as one short chip: company, latest value, change."""
     latest = row.get("latest") or {}
     if latest.get("withheld"):
@@ -256,7 +297,8 @@ def _var_chip(row: dict) -> str:
         value = "no data yet"
     change = str(row.get("change") or "").split(" vs ")[0]
     tone = "up" if change.startswith("+") else ("down" if change.startswith("-") or change.startswith("−") else "")
-    return (f'<span class="chip" title="{_e(row.get("name"))} · {_e(latest.get("period"))} · {_e(row.get("unit"))}">'
+    tone_cls = MEANS.get(str((rule or {}).get("means")), ("flat", "no verdict yet"))[0] if rule else ""
+    return (f'<span class="chip {tone_cls}" title="{_e(row.get("name"))} · {_e(latest.get("period"))} · {_e(row.get("unit"))}">'
             f'{_e(_company(row))} <b>{_e(value)}</b>'
             + (f' <span class="chg {tone}">{_e(change)}</span>' if change else "") + "</span>")
 
@@ -279,7 +321,7 @@ def _next_items(record: dict, rows: list[dict], today: str | None = None) -> lis
     check = str(record.get("next_check_at") or record.get("fresh_until") or "")[:10]
     if check:
         events.append((check, f'<span class="nx"><b>{_e(check[5:])}</b> Pack check</span>'))
-    return [h for _, h in sorted(events)[:4]]
+    return [h for _, h in sorted(events)[:4]] + ['<a class="tc-cal" href="calendar.ics">Add these dates to your calendar</a>']
 
 
 def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings: dict | None = None,
@@ -300,13 +342,48 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
     hyps = ""
     hyp_list = [h for h in (summary.get("hypotheses") or []) if isinstance(h, dict)][:8]
     for n, h in enumerate(hyp_list, 1):
-        chips = "".join(_var_chip(by_var[v]) for v in h.get("variables") or [] if v in by_var)
+        reads = h.get("reads") if isinstance(h.get("reads"), dict) else {}
+        def judged(v: str) -> dict | None:
+            """A rule only judges a reading that came after the Pack's baseline; the baseline itself proves nothing."""
+            spec = reads.get(v) if isinstance(reads.get(v), dict) else {}
+            latest = by_var[v].get("latest") or {}
+            if not spec.get("baseline") or latest.get("period") == spec.get("baseline"):
+                return None
+            return _band(spec.get("rules") or [], latest.get("value"))
+
+        found = [(by_var[v], judged(v)) for v in h.get("variables") or [] if v in by_var]
+        chips = "".join(_var_chip(row, rule) for row, rule in found)
+        verdicts = [str(rule.get("means")) for _, rule in found if rule]
+        light = ("down" if any(m in ("weakens", "fires") for m in verdicts)
+                 else "up" if verdicts and all(m == "strengthens" for m in verdicts) else "flat")
+        light_text = {"down": "a tracked number weakens it", "up": "tracked numbers support it",
+                      "flat": "no verdict yet"}[light]
+        whys = []
+        for row, rule in found:  # why this number, and the thresholds that would support or weaken the hypothesis
+            spec = reads.get(row.get("variable")) if isinstance(reads.get(row.get("variable")), dict) else {}
+            rules = spec.get("rules") or []
+            bars = [f'{MEANS[str(r.get("means"))][1]} if {_cond(r.get("if"))}' for r in rules if str(r.get("means")) in MEANS]
+            why = next((r.get("say") for r in rules if str(r.get("means")) == "strengthens" and r.get("say")), None)
+            if rule and rule.get("say"):
+                why = rule.get("say")
+            text = " · ".join(x for x in ("; ".join(bars[:3]), _clip(why, 120) if why else "") if x)
+            if not text and row.get("caveat"):
+                text = _clip(row.get("caveat"), 140)
+            src = _https(row.get("source_url"))
+            link = f' <a href="{_e(src)}">source</a>' if src else ""
+            if text or link:
+                whys.append(f'<li><b>{_e(_company(row))}</b> {_e(text)}{link}</li>')
         wrong = h.get("falsifier")
+        moves = "; ".join(f'{str(m.get("node")).split(".")[-1].replace("_", " ")}s {m.get("effect")[:-1]}'
+                          for m in h.get("moves") or [] if isinstance(m, dict))
         hyps += (f'<li class="tc-item"><div class="tc-row"><span class="tc-n">{_e(letter + "·") if letter else ""}H{n}</span>'
-                 f'<span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
+                 f'<span class="light {light}" title="{_e(light_text)}"></span><span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
                  f'<span class="tc-due">{_e(h.get("confidence") or "")}{" · " if h.get("confidence") and h.get("due") else ""}'
                  f'{_e(("test " + str(h.get("due"))) if h.get("due") else "")}</span></div>'
                  + (f'<div class="tc-chips">{chips}</div>' if chips else "")
+                 + (f'<details class="tc-why"><summary>Why these numbers, thresholds and sources</summary><ul>{"".join(whys)}</ul></details>'
+                    if whys else "")
+                 + (f'<div class="tc-holds">✓ if it holds: {_e(moves)} (per the Pack)</div>' if moves else "")
                  + (f'<div class="tc-wrong" title="{_e(wrong)}">✗ wrong if {_e(_clip(wrong, 110))}</div>' if wrong else "")
                  + "</li>")
     body = f'<ol class="tc-list">{hyps}</ol>' if hyps else ""
@@ -550,59 +627,103 @@ def _wrap(text: str, width: int = 15) -> list[str]:
 
 
 def _chain_3d(theme: str, packs: list[tuple[str, dict, list[dict]]]) -> str:
-    """Where the theses sit: the sector's chain as isometric blocks (SVG, no script). A step a hypothesis tracks is
-    filled and carries its marker, for example A·H1."""
-    marks: dict[str, list[str]] = {}
+    """The sector's supply chain and where the followed theses sit on it (SVG, no script).
+
+    Steps stand left to right on one platform. A step with a tracked company under a hypothesis is a tall, filled
+    block with a pin naming the Pack and hypotheses (for example "B · H1 H2"); other steps stay low and pale.
+    Under each block: the step's name and the companies tracked there."""
+    marks: dict[str, dict[str, list[int]]] = {}
+    companies: dict[str, list[str]] = {}
     extra: list[tuple[tuple, str]] = []
     for letter, summary, rows in packs:
+        for row in rows:
+            step = _step_label(row)
+            names = companies.setdefault(step, [])
+            if _company(row) not in names:
+                names.append(_company(row))
+            extra.append((_step_key(row), step))
         by_var = {r.get("variable"): r for r in rows}
         for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1):
             for v in h.get("variables") or []:
                 row = by_var.get(v)
-                if not row:
-                    continue
-                step = _step_label(row)
-                tag = f"{letter}·H{n}"
-                if tag not in marks.setdefault(step, []):
-                    marks[step].append(tag)
-                extra.append((_step_key(row), step))
-    if not marks:
+                if row:
+                    nums = marks.setdefault(_step_label(row), {}).setdefault(letter, [])
+                    if n not in nums:
+                        nums.append(n)
+    if not companies:
         return ""
     steps = list(SECTOR_STEPS.get(theme, []))
     for _, step in sorted(extra):
         if step not in steps:
             steps.append(step)
     steps = steps[:8]
-    w, gap = 112, 22
-    width = 30 + len(steps) * (w + gap)
-    parts = []
+
+    w, gap, d, pad, thick = 84, 20, 17, 30, 9
+    hw = w / 2
+    base = 78 + d + 40                      # ground line of the blocks
+    width = pad * 2 + len(steps) * w + (len(steps) - 1) * gap
+    left, right, half = pad - 14, width - pad + 14, d + 8
+    run = half * hw / d                     # keeps the platform's edges parallel to the blocks'
+
+    def pts(*xy: tuple[float, float]) -> str:
+        return " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+
+    out = [
+        # the platform everything stands on
+        f'<polygon class="c3-plat-side" points="{pts((left, base), (left + run, base + half), (left + run, base + half + thick), (left, base + thick))}"/>',
+        f'<polygon class="c3-plat-side" points="{pts((left + run, base + half), (right - run, base + half), (right - run, base + half + thick), (left + run, base + half + thick))}"/>',
+        f'<polygon class="c3-plat-side dark" points="{pts((right - run, base + half), (right, base), (right, base + thick), (right - run, base + half + thick))}"/>',
+        f'<polygon class="c3-plat" points="{pts((left, base), (left + run, base - half), (right - run, base - half), (right, base), (right - run, base + half), (left + run, base + half))}"/>',
+    ]
     for i, step in enumerate(steps):
-        x, y = 20 + i * (w + gap), 92
+        x = pad + i * (w + gap)
         on = step in marks
-        top, left, right = (("var(--forest-2)", "var(--forest)", "#21503f") if on
-                            else ("var(--paper-bright)", "var(--line)", "var(--paper)"))
-        hw, d = w / 2, 26
-        parts.append(
-            f'<polygon points="{x},{y} {x + hw},{y - d} {x + w},{y} {x + hw},{y + d}" fill="{top}" stroke="var(--line)"/>'
-            f'<polygon points="{x},{y} {x + hw},{y + d} {x + hw},{y + d + 34} {x},{y + 34}" fill="{left}" stroke="var(--line)"/>'
-            f'<polygon points="{x + hw},{y + d} {x + w},{y} {x + w},{y + 34} {x + hw},{y + d + 34}" fill="{right}" stroke="var(--line)"/>')
-        if i < len(steps) - 1:
+        height = 40 if on else 12
+        top = base - height
+        state = "on" if on else "off"
+        if i < len(steps) - 1:              # flow to the next step, drawn on the platform
             ax = x + w + 3
-            parts.append(f'<text x="{ax + gap / 2 - 5}" y="{y + 22}" class="c3-arrow">→</text>')
-        for j, line in enumerate(_wrap(step)):
-            parts.append(f'<text x="{x + hw}" y="{y + d + 54 + j * 14}" text-anchor="middle" '
-                         f'class="c3-label{" on" if on else ""}">{_e(line)}</text>')
-        for j, tag in enumerate(marks.get(step, [])[:4]):
-            parts.append(f'<g><rect x="{x + hw - 26}" y="{y - d - 22 - j * 20}" width="52" height="17" rx="8" '
-                         f'class="c3-mark"/><text x="{x + hw}" y="{y - d - 9.5 - j * 20}" text-anchor="middle" '
-                         f'class="c3-mark-t">{_e(tag)}</text></g>')
-    height = 92 + 26 + 54 + 3 * 14 + 6
-    legend = "".join(f'<li><b>{_e(letter)}</b> {_e(summary.get("title"))}</li>' for letter, summary, _ in packs)
-    return (f'<section class="card chain3d"><p class="eyebrow">Where the theses sit · {_e(SHORT_THEMES.get(theme, _theme_label(theme)))}</p>'
-            f'<svg viewBox="0 -10 {width} {height + 10}" role="img" aria-label="Supply chain steps and the hypotheses that track them">'
-            f'{"".join(parts)}</svg><ul class="c3-legend">{legend}</ul>'
-            '<p class="muted small">Filled steps are where a hypothesis tracks a company. Markers name the Pack (A, B…) '
-            'and the hypothesis.</p></section>')
+            out.append(f'<path class="c3-flow" d="M{ax:.1f},{base} h{gap - 10}"/>'
+                       f'<polygon class="c3-flow-head" points="{pts((ax + gap - 10, base - 3.5), (ax + gap - 5, base), (ax + gap - 10, base + 3.5))}"/>')
+        out.append(f'<ellipse class="c3-shadow" cx="{x + hw + 7:.1f}" cy="{base + 5}" rx="{hw * 0.95:.1f}" ry="{d * 0.85:.1f}"/>')
+        out.append(f'<polygon class="c3-left {state}" points="{pts((x, top), (x + hw, top + d), (x + hw, base + d), (x, base))}"/>')
+        out.append(f'<polygon class="c3-right {state}" points="{pts((x + hw, top + d), (x + w, top), (x + w, base), (x + hw, base + d))}"/>')
+        out.append(f'<polygon class="c3-top {state}" points="{pts((x, top), (x + hw, top - d), (x + w, top), (x + hw, top + d))}"/>')
+        out.append(f'<text class="c3-num {state}" x="{x + hw}" y="{top + 4}" text-anchor="middle">{i + 1}</text>')
+        pills = [f"{letter} · " + " ".join(f"H{n}" for n in sorted(nums)) for letter, nums in sorted(marks.get(step, {}).items())][:3]
+        if pills:
+            out.append(f'<path class="c3-pin" d="M{x + hw},{top - d - 1} V{top - d - 12}"/>')
+        for j, text in enumerate(pills):
+            py = top - d - 21 - j * 20
+            pw = 16 + 6.3 * len(text)
+            out.append(f'<rect class="c3-pill" x="{x + hw - pw / 2:.1f}" y="{py - 9}" width="{pw:.1f}" height="18" rx="9"/>'
+                       f'<text class="c3-pill-t" x="{x + hw}" y="{py + 4}" text-anchor="middle">{_e(text)}</text>')
+        ly = base + half + thick + 20
+        label = _wrap(step, 14)
+        for j, line in enumerate(label):
+            out.append(f'<text class="c3-label {state}" x="{x + hw}" y="{ly + j * 13}" text-anchor="middle">{_e(line)}</text>')
+        cy = ly + len(label) * 13 + 5
+        names = companies.get(step) or []
+        for j, name in enumerate(names[:3]):
+            out.append(f'<text class="c3-co" x="{x + hw}" y="{cy + j * 12}" text-anchor="middle">{_e(_clip(name, 16))}</text>')
+        if not names:
+            out.append(f'<text class="c3-co none" x="{x + hw}" y="{cy}" text-anchor="middle">not tracked yet</text>')
+    height = base + half + thick + 20 + 3 * 13 + 5 + 3 * 12 + 4
+    from .profile_store import SECTORS
+
+    gloss = next((x.get("gloss") for x in SECTORS if x.get("id") == theme), "")
+    stage = next((summary.get("stage") for _, summary, _ in packs if summary.get("stage")), None)
+    legend = "".join(f'<li><b>{_e(letter)}</b>{_e(summary.get("title"))}</li>' for letter, summary, _ in packs)
+    name = SHORT_THEMES.get(theme, _theme_label(theme))
+    return (f'<section class="card chain3d"><p class="eyebrow">The {_e(name)} supply chain · where the theses sit</p>'
+            + (f'<p class="c3-gloss">{_e(gloss)}</p>' if gloss else "")
+            + (f'<p class="muted small">Part of AI compute, in the {_e(stage.replace("_", " "))} layer. '
+               f'<a href="{AI_COMPUTE_MAP}">See the AI compute map on equitylayer.io →</a></p>' if stage else "")
+            + f'<div class="c3-wrap"><svg viewBox="0 0 {width} {height}" role="img" '
+            f'aria-label="The {_e(name)} supply chain, the companies tracked at each step, and the hypotheses that track them">'
+            f'{"".join(out)}</svg></div><ul class="c3-legend">{legend}</ul>'
+            '<p class="muted small">Left to right, from materials to the systems in the data center. Tall, filled steps '
+            'are where a hypothesis tracks a company; the pin names the Pack and its hypotheses.</p></section>')
 
 
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
@@ -785,7 +906,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.chain3d svg{{width:100%;height:auto;display:block;margin:6px 0}}.c3-label{{font:500 11px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-arrow{{font:14px var(--body);fill:var(--gold)}}.c3-mark{{fill:var(--gold)}}.c3-mark-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-legend{{list-style:none;margin:4px 0 6px;padding:0;font-size:13.5px;display:grid;gap:2px}}.c3-legend b{{display:inline-block;width:20px;color:var(--forest-2)}}.tc-letter{{font:600 12px var(--mono);background:var(--forest-2);color:#fff;border-radius:6px;padding:1px 7px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.light{{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;background:var(--nodata)}}.light.up{{background:var(--seen)}}.light.down{{background:var(--against)}}.chip.up{{border-color:var(--seen)}}.chip.down{{border-color:var(--against)}}.tc-holds{{font-size:12.5px;color:var(--seen)}}.tc-why summary{{cursor:pointer;font-size:12px;color:var(--forest-2);margin:2px 0}}.tc-why ul{{margin:4px 0 2px;padding-left:16px;font-size:12.5px;color:var(--muted)}}.tc-cal{{font-size:12.5px}}.c3-wrap{{overflow-x:auto;margin:8px 0 2px}}.chain3d svg{{width:100%;min-width:700px;height:auto;display:block}}.c3-plat{{fill:color-mix(in srgb,var(--forest-2) 7%,var(--paper-bright));stroke:var(--line)}}.c3-plat-side{{fill:var(--line)}}.c3-plat-side.dark{{fill:color-mix(in srgb,var(--line) 78%,#000)}}.c3-shadow{{fill:#000;opacity:.09}}.c3-top.on{{fill:var(--forest-2)}}.c3-left.on{{fill:var(--forest)}}.c3-right.on{{fill:color-mix(in srgb,var(--forest) 78%,#000)}}.c3-top.off{{fill:var(--paper-bright);stroke:var(--line)}}.c3-left.off{{fill:color-mix(in srgb,var(--line) 70%,var(--paper-bright))}}.c3-right.off{{fill:var(--line)}}.c3-top.on,.c3-left.on,.c3-right.on{{stroke:color-mix(in srgb,var(--forest-2) 60%,#fff);stroke-width:.6}}.c3-num{{font:600 11px var(--mono)}}.c3-num.on{{fill:#fff}}.c3-num.off{{fill:var(--muted)}}.c3-flow{{stroke:var(--gold);stroke-width:1.6;fill:none}}.c3-flow-head{{fill:var(--gold)}}.c3-pin{{stroke:var(--gold);stroke-width:1.4}}.c3-pill{{fill:var(--gold)}}.c3-pill-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-label{{font:500 11.5px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-label{{font:500 11px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-arrow{{font:14px var(--body);fill:var(--gold)}}.c3-co{{font:11px var(--body);fill:var(--forest-2)}}.c3-co.none{{fill:var(--muted);font-style:italic}}.c3-gloss{{margin:2px 0 0;font-size:14px}}.c3-mark{{fill:var(--gold)}}.c3-mark-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-legend{{list-style:none;margin:4px 0 6px;padding:0;font-size:13.5px;display:grid;gap:2px}}.c3-legend b{{display:inline-block;min-width:20px;margin-right:6px;padding:0 6px;border-radius:9px;background:var(--gold);color:#1b1b1b;font:600 11px/18px var(--mono);text-align:center}}.tc-letter{{font:600 12px var(--mono);background:var(--forest-2);color:#fff;border-radius:6px;padding:1px 7px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
 
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
@@ -824,6 +945,60 @@ td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{
 
 
 JSON_NAME = "dashboard.json"
+ICS_NAME = "calendar.ics"
+
+
+def calendar_events(theses: list[dict], watchlists: list[dict], followed: dict[str, dict] | None = None) -> list[dict]:
+    """Dates that can change what you follow: data due for tracked variables, Pack checks, hypothesis tests."""
+    events: dict[tuple, dict] = {}
+
+    def add(day: Any, what: str, item: Any) -> None:
+        day = str(day or "")[:10]
+        if len(day) == 10 and day[4] == "-":
+            events.setdefault((day, what), {"date": day, "what": what, "item_id": item})
+
+    for w in watchlists:
+        for row in ((w.get("last_check") or {}).get("rows") or []):
+            if isinstance(row, dict):
+                add(row.get("next_reading"), f"New data due: {row.get('name')}", w.get("id"))
+    for pid, r in (followed or {}).items():
+        summary = r.get("pack") if isinstance(r.get("pack"), dict) else {}
+        title = summary.get("title") or pid
+        add(r.get("next_check_at"), f"EquityLayer Pack check: {title}", r.get("follow_id"))
+        for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1):
+            add(h.get("due"), f"Hypothesis H{n} is tested: {_short_claim(h.get('statement'), 80)}", r.get("follow_id"))
+    for t in theses:
+        add((t.get("last_check") or {}).get("next_due"), f"Your thesis check: {t.get('title')}", t.get("id"))
+    return sorted(events.values(), key=lambda e: (e["date"], e["what"]))
+
+
+def calendar_ics(events: list[dict]) -> str:
+    """All-day events in iCalendar format, so any calendar app can subscribe."""
+    def esc(text: Any) -> str:
+        return str(text or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", " ")
+
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//EquityLayer//Hermes plugin//EN", "X-WR-CALNAME:EquityLayer research dates"]
+    for n, e in enumerate(events):
+        day = e["date"].replace("-", "")
+        lines += ["BEGIN:VEVENT", f"UID:el-{day}-{n}@equitylayer.io", f"DTSTAMP:{day}T000000Z", f"DTSTART;VALUE=DATE:{day}",
+                  f"SUMMARY:{esc(e['what'])}", "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines) + "\r\n"
+
+
+def write_text(root: Path, name: str, text: str) -> Path:
+    path = Path(root) / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".txt")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return path
 JSON_FORMAT = "equitylayer-hermes-dashboard/1"
 
 
@@ -863,6 +1038,7 @@ def snapshot(theses: list[dict], watchlists: list[dict], followed: dict[str, dic
             "hypotheses": [{
                 "id": f"H{n}", "claim": _short_claim(h.get("statement")), "statement": h.get("statement"),
                 "confidence": h.get("confidence"), "test_by": h.get("due"), "wrong_if": h.get("falsifier"),
+                "if_it_holds": h.get("moves") or [],
                 "tracks": [_reading(by_var[v]) if v in by_var else {"variable": v} for v in h.get("variables") or []],
             } for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1)],
             "readings_unread": isinstance(watch.get("pending"), dict),
@@ -881,7 +1057,7 @@ def snapshot(theses: list[dict], watchlists: list[dict], followed: dict[str, dic
                  "readings": [_reading(r) for r in ((w.get("last_check") or {}).get("rows") or []) if isinstance(r, dict)]}
                 for w in watchlists if w.get("id") not in linked]
     return {"format": JSON_FORMAT, "generated_at": stamp, "equitylayer_packs": out_packs, "your_theses": own,
-            "readings": readings,
+            "readings": readings, "calendar": calendar_events(theses, watchlists, followed),
             "note": "Built on this machine from local files. Research evidence, not a trade instruction. "
                     "Not investment advice."}
 

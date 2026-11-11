@@ -411,7 +411,7 @@ def test_dashboard_is_plain_a_packs_readings_sit_on_its_card(make_service):
     call(service.el_check, {"item_id": fid})
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
     glance = page[page.index('id="glance"'):page.index('id="evidence"')]
-    assert 'class="chip"' in glance and "wrong if" in glance
+    assert 'class="chip' in glance and "wrong if" in glance
     assert "What your readings show" not in page  # no second card for the same Pack's readings
     assert "Discover → Follow" not in page and "Watchlist <b>" not in page
     assert "new reading" in page and "I&#x27;ve read it" not in page and "I've read it" in page
@@ -436,7 +436,7 @@ def test_pack_card_is_a_checklist():
     page = render(None, [], [watch], followed={"p": record})
     card = page[page.index("thesis-card"):page.index("</section>", page.index("thesis-card"))]
     for part in ("Thesis Pack · CPO", "Lasers are the bottleneck", "H1", "Laser supply is rationed<", "low",
-                 "test 2027-02-10", "wrong if A filing says supply caught up.", 'class="chip"', "540,492",
+                 "test 2027-02-10", "wrong if A filing says supply caught up.", 'class="chip', "540,492",
                  "+3.8%", ">Next<", "late: ", "Pack check"):
         assert part in card, part
     assert "EquityLayer Research Pack" not in page
@@ -457,3 +457,64 @@ def test_dashboard_json_has_the_same_facts_for_agents(make_service, tmp_path):
     assert h1["id"] == "H1" and h1["wrong_if"] and h1["test_by"] and h1["tracks"][0]["variable"].startswith("v:")
     assert data["readings"] == []  # a Pack's readings live under the Pack, not twice
     assert "Not investment advice." in data["note"]
+
+
+
+def test_chain_diagram_lights_thresholds_and_calendar(make_service, tmp_path):
+    from equitylayer_plugin.dashboard import _band, _cond, calendar_events, calendar_ics, render
+
+    rules = [{"if": ">= 540492", "means": "strengthens", "say": "Above the bar."},
+             {"if": "501212..540492", "means": "insufficient_evidence", "say": "Inside the range."},
+             {"if": "< 501212", "means": "weakens", "say": "Below the bar."}]
+    assert _band(rules, 560000)["means"] == "strengthens" and _band(rules, 400000)["means"] == "weakens"
+    assert _band(rules, "a statement") is None and _cond(">= 540492") == "≥ 540,492"
+
+    def page_for(period, value):
+        record = {"follow_id": "follow_" + "1" * 32, "target_id": "p", "next_check_at": "2026-11-12", "readings_id": "r",
+                  "pack": {"title": "Lasers", "theme_id": "optical_cpo", "category": "thesis", "stage": "network",
+                           "hypotheses": [{"statement": "Laser supply is rationed", "confidence": "low", "due": "2027-02-10",
+                                           "falsifier": "x", "variables": ["v:3081.two.revenue.monthly"],
+                                           "reads": {"v:3081.two.revenue.monthly": {"baseline": "2026-09", "rules": rules}}}]}}
+        watch = {"id": "r", "title": "CPO Pack readings: Lasers", "follow_id": record["follow_id"], "theme": "optical_cpo",
+                 "last_check": {"rows": [{"variable": "v:3081.two.revenue.monthly", "name": "LandMark (3081) monthly revenue",
+                                          "latest": {"period": period, "value": value}, "next_reading": "2026-12-10",
+                                          "company": {"step": "Epitaxy wafers", "step_order": 1, "role": "Makes epi wafers."}}]}}
+        return render(None, [], [watch], followed={"p": record}), record, watch
+
+    page, record, watch = page_for("2026-09", 540492)      # the baseline reading judges nothing
+    assert 'class="light flat"' in page and 'class="light up"' not in page
+    page, _, _ = page_for("2026-10", 480000)               # a later reading below the bar
+    assert 'class="light down"' in page and "weakens if &lt; 501,212" in page and "supports if ≥ 540,492" in page
+    assert "The CPO supply chain · where the theses sit" in page and "A · H1" in page and "not tracked yet" in page
+    assert "Part of AI compute, in the network layer." in page and "https://equitylayer.io/themes/ai-compute" in page
+    assert "<script" not in page
+    events = calendar_events([], [watch], {"p": record})
+    assert [e["date"] for e in events] == ["2026-11-12", "2026-12-10", "2027-02-10"]
+    ics = calendar_ics(events)
+    assert ics.startswith("BEGIN:VCALENDAR") and ics.count("BEGIN:VEVENT") == 3 and "DTSTART;VALUE=DATE:20261210" in ics
+
+    service, _, _ = make_service(PACK_ROUTES)
+    fid = call(service.el_track, {"pack_id": PACK_ID})["item_id"]
+    call(service.el_check, {"item_id": fid})
+    rendered = call(service.el_dashboard_render)
+    assert (tmp_path / "calendar.ics").exists() and "calendar.ics" in rendered["markdown"]
+    assert json.loads((tmp_path / "dashboard.json").read_text())["calendar"]
+
+
+
+def test_card_shows_sources_and_what_moves_if_a_hypothesis_holds():
+    from equitylayer_plugin.dashboard import render
+    from equitylayer_plugin.formatters import pack_summary
+
+    summary = pack_summary({"pack_id": "p", "title": "T", "theme_id": "optical_cpo", "hypotheses": [
+        {"assertion": {"statement": "Pluggables keep growing"}, "confidence": "medium", "test": {"falsifier": "x", "due": "2027-05-15"},
+         "where_value_moves": [{"node": "network.optical_module", "effect": "gains"}, {"node": "x", "effect": "moon"}],
+         "watches": [{"variable": "v:cohr.us.revenue.quarterly", "baseline": {"period": "FY2027-Q1"}, "how_to_read": []}]}]})
+    assert summary["hypotheses"][0]["moves"] == [{"node": "network.optical_module", "effect": "gains"}]
+    record = {"follow_id": "follow_" + "1" * 32, "target_id": "p", "readings_id": "r", "pack": summary}
+    watch = {"id": "r", "title": "CPO Pack readings: T", "follow_id": record["follow_id"], "last_check": {"rows": [
+        {"variable": "v:cohr.us.revenue.quarterly", "name": "Coherent segment revenue", "caveat": "Not CPO alone.",
+         "latest": {"period": "FY2027-Q1", "value": 1951.7}, "source_url": "https://www.sec.gov/x"}]}}
+    page = render(None, [], [watch], followed={"p": record})
+    assert "✓ if it holds: optical modules gain (per the Pack)" in page
+    assert '<a href="https://www.sec.gov/x">source</a>' in page

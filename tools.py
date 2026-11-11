@@ -171,6 +171,8 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         # The same facts as data, so the person's other agents can read them without parsing the page.
         dashboard_page.write_json(self._dashboard_root(),
                                   dashboard_page.snapshot(theses, watchlists, followed=followed, packs=packs))
+        dashboard_page.write_text(self._dashboard_root(), dashboard_page.ICS_NAME, dashboard_page.calendar_ics(
+            dashboard_page.calendar_events(theses, watchlists, followed)))
         return dashboard_page.write(self._dashboard_root(), page)
 
     # The last registry this plugin saw, so the dashboard can say which Research Packs are published.
@@ -251,7 +253,8 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             "markdown": (f"Your dashboard: what you follow, what needs you, recent events and what is due next, "
                          f"built on this machine.\n\n::preview{{file=\"{path}\" height=\"560\"}}\n\n"
                          f"It is saved at `{path}`. Reopen it any time with `/el dashboard` or from Artifacts. "
-                         f"The same facts as data, for other agents: `{path.parent / dashboard_page.JSON_NAME}`."),
+                         f"The same facts as data, for other agents: `{path.parent / dashboard_page.JSON_NAME}`. "
+                         f"The dates that matter, for any calendar app: `{path.parent / dashboard_page.ICS_NAME}`."),
         }
 
     def _refuse_locked(self, entry_id: str, target: dict) -> dict | None:

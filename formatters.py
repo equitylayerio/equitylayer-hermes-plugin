@@ -110,17 +110,27 @@ def pack_summary(pack: Any) -> dict | None:
         test = h.get("test") if isinstance(h.get("test"), dict) else {}
         watched = [w["variable"] for w in h.get("watches") or []
                    if isinstance(w, dict) and isinstance(w.get("variable"), str) and VARIABLE_RE.match(w["variable"])]
+        reads = {w["variable"]: {
+                     "baseline": (w.get("baseline") or {}).get("period") if isinstance(w.get("baseline"), dict) else None,
+                     "rules": [{"if": str(r.get("if"))[:40], "means": str(r.get("means"))[:40], "say": _clip(r.get("say"), 160)}
+                               for r in (w.get("how_to_read") or [])[:6] if isinstance(r, dict) and r.get("if")]}
+                 for w in h.get("watches") or [] if isinstance(w, dict) and w.get("variable") in watched}
         variables += [v for v in watched if v not in variables]
         statement = a.get("statement") or h.get("statement") or h.get("title")
         if statement:
             hyps.append({"statement": _clip(statement, 400), "confidence": h.get("confidence"), "state": h.get("state"),
                          "falsifier": _clip(test.get("falsifier")) if test.get("falsifier") else None,
-                         "due": test.get("due"), "variables": watched})
+                         "due": test.get("due"), "variables": watched, "reads": reads,
+                         # What the Pack says moves if the hypothesis holds; nothing is inferred here.
+                         "moves": [{"node": str(m.get("node"))[:60], "effect": str(m.get("effect"))[:20]}
+                                   for m in (h.get("where_value_moves") or [])[:4]
+                                   if isinstance(m, dict) and m.get("node") and m.get("effect") in ("gains", "loses")]})
     url = cite.get("url") if str(cite.get("url") or "").startswith("https://equitylayer.io/") else None
     return {"pack_id": pack.get("pack_id"), "title": _clip(cite.get("title") or pack.get("title") or pack.get("pack_id"), 200),
             "view": _clip(pack.get("view"), 400) if pack.get("view") else None, "theme_id": pack.get("theme_id"),
             "revision": pack.get("revision") or pack.get("pack_version"), "as_of": pack.get("as_of"), "url": url,
             "category": pack.get("category") if pack.get("category") in ("thesis", "tracking") else None,
+            "stage": pack.get("stage") if isinstance(pack.get("stage"), str) and pack.get("stage").isidentifier() else None,
             "hypotheses": hyps[:6], "variables": variables[:8]}
 
 
