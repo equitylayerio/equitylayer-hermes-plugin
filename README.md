@@ -46,7 +46,7 @@ A plain `mcp.json` connector gives the model EquityLayer's tools. It cannot reme
 Requires Hermes Agent 0.23.0 or later.
 
 ```bash
-hermes plugins install https://github.com/equitylayer/equitylayer-hermes-plugin --enable
+hermes plugins install https://github.com/equitylayerio/equitylayer-hermes-plugin --enable
 ```
 
 No account, key or sign-in is needed. The default endpoint is `https://equitylayer.io/mcp`.
