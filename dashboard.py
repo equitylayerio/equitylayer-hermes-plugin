@@ -282,7 +282,8 @@ def _next_items(record: dict, rows: list[dict], today: str | None = None) -> lis
     return [h for _, h in sorted(events)[:4]]
 
 
-def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings: dict | None = None) -> str:
+def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings: dict | None = None,
+               letter: str | None = None) -> str:
     """A followed Pack as a scoreboard: the thesis, then one compact row per hypothesis (claim, the numbers it
     tracks, when it is tested, and what would prove it wrong), then what changes next. Details sit behind hover
     and the full Pack link."""
@@ -301,7 +302,7 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
     for n, h in enumerate(hyp_list, 1):
         chips = "".join(_var_chip(by_var[v]) for v in h.get("variables") or [] if v in by_var)
         wrong = h.get("falsifier")
-        hyps += (f'<li class="tc-item"><div class="tc-row"><span class="tc-n">H{n}</span>'
+        hyps += (f'<li class="tc-item"><div class="tc-row"><span class="tc-n">{_e(letter + "·") if letter else ""}H{n}</span>'
                  f'<span class="tc-claim" title="{_e(h.get("statement"))}">{_e(_short_claim(h.get("statement"), 90))}</span>'
                  f'<span class="tc-due">{_e(h.get("confidence") or "")}{" · " if h.get("confidence") and h.get("due") else ""}'
                  f'{_e(("test " + str(h.get("due"))) if h.get("due") else "")}</span></div>'
@@ -312,7 +313,9 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
     if compact and body:
         body = f'<details class="more"{" open" if open_ else ""}><summary>{len(hyp_list)} hypotheses</summary>{body}</details>'
     nexts = _next_items(record, rows)
-    return (f'<section class="card hero pack thesis-card"><div class="tc-head"><p class="eyebrow">{_e(kind)}'
+    return (f'<section class="card hero pack thesis-card"><div class="tc-head">'
+            + (f'<span class="tc-letter">{_e(letter)}</span>' if letter else "")
+            + f'<p class="eyebrow">{_e(kind)}'
             + (f" · {_e(theme)}" if theme else "") + "</p>" + badge
             + (f'<a class="tc-link" href="{_e(url)}" title="Read the full Pack on equitylayer.io">full Pack ↗</a>' if url else "")
             + f'</div><h3 class="tc-thesis" title="{_e(summary.get("view"))}">{_e(summary.get("title"))}</h3>'
@@ -526,6 +529,82 @@ def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str =
     return "".join(parts) + "</section>"
 
 
+# The full chain each sector is drawn on, left to right (company_roles.json steps, in order).
+SECTOR_STEPS = {
+    "optical_cpo": ["Epitaxy wafers", "Lasers and optical modules", "Passive optics and fiber arrays",
+                    "Optical modules and transceivers", "Contract manufacturing", "Optical networking systems"],
+}
+
+
+def _wrap(text: str, width: int = 15) -> list[str]:
+    words, lines, line = str(text).split(), [], ""
+    for w in words:
+        if len(line) + len(w) + 1 > width and line:
+            lines.append(line)
+            line = w
+        else:
+            line = f"{line} {w}".strip()
+    if line:
+        lines.append(line)
+    return lines[:3]
+
+
+def _chain_3d(theme: str, packs: list[tuple[str, dict, list[dict]]]) -> str:
+    """Where the theses sit: the sector's chain as isometric blocks (SVG, no script). A step a hypothesis tracks is
+    filled and carries its marker, for example A·H1."""
+    marks: dict[str, list[str]] = {}
+    extra: list[tuple[tuple, str]] = []
+    for letter, summary, rows in packs:
+        by_var = {r.get("variable"): r for r in rows}
+        for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1):
+            for v in h.get("variables") or []:
+                row = by_var.get(v)
+                if not row:
+                    continue
+                step = _step_label(row)
+                tag = f"{letter}·H{n}"
+                if tag not in marks.setdefault(step, []):
+                    marks[step].append(tag)
+                extra.append((_step_key(row), step))
+    if not marks:
+        return ""
+    steps = list(SECTOR_STEPS.get(theme, []))
+    for _, step in sorted(extra):
+        if step not in steps:
+            steps.append(step)
+    steps = steps[:8]
+    w, gap = 112, 22
+    width = 30 + len(steps) * (w + gap)
+    parts = []
+    for i, step in enumerate(steps):
+        x, y = 20 + i * (w + gap), 92
+        on = step in marks
+        top, left, right = (("var(--forest-2)", "var(--forest)", "#21503f") if on
+                            else ("var(--paper-bright)", "var(--line)", "var(--paper)"))
+        hw, d = w / 2, 26
+        parts.append(
+            f'<polygon points="{x},{y} {x + hw},{y - d} {x + w},{y} {x + hw},{y + d}" fill="{top}" stroke="var(--line)"/>'
+            f'<polygon points="{x},{y} {x + hw},{y + d} {x + hw},{y + d + 34} {x},{y + 34}" fill="{left}" stroke="var(--line)"/>'
+            f'<polygon points="{x + hw},{y + d} {x + w},{y} {x + w},{y + 34} {x + hw},{y + d + 34}" fill="{right}" stroke="var(--line)"/>')
+        if i < len(steps) - 1:
+            ax = x + w + 3
+            parts.append(f'<text x="{ax + gap / 2 - 5}" y="{y + 22}" class="c3-arrow">→</text>')
+        for j, line in enumerate(_wrap(step)):
+            parts.append(f'<text x="{x + hw}" y="{y + d + 54 + j * 14}" text-anchor="middle" '
+                         f'class="c3-label{" on" if on else ""}">{_e(line)}</text>')
+        for j, tag in enumerate(marks.get(step, [])[:4]):
+            parts.append(f'<g><rect x="{x + hw - 26}" y="{y - d - 22 - j * 20}" width="52" height="17" rx="8" '
+                         f'class="c3-mark"/><text x="{x + hw}" y="{y - d - 9.5 - j * 20}" text-anchor="middle" '
+                         f'class="c3-mark-t">{_e(tag)}</text></g>')
+    height = 92 + 26 + 54 + 3 * 14 + 6
+    legend = "".join(f'<li><b>{_e(letter)}</b> {_e(summary.get("title"))}</li>' for letter, summary, _ in packs)
+    return (f'<section class="card chain3d"><p class="eyebrow">Where the theses sit · {_e(SHORT_THEMES.get(theme, _theme_label(theme)))}</p>'
+            f'<svg viewBox="0 -10 {width} {height + 10}" role="img" aria-label="Supply chain steps and the hypotheses that track them">'
+            f'{"".join(parts)}</svg><ul class="c3-legend">{legend}</ul>'
+            '<p class="muted small">Filled steps are where a hypothesis tracks a company. Markers name the Pack (A, B…) '
+            'and the hypothesis.</p></section>')
+
+
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
            preview: dict | None = None, saved_at: str = "", packs: list[dict] | None = None,
            followed: dict[str, dict] | None = None, packs_as_of: str | None = None) -> str:
@@ -637,15 +716,32 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                           key=lambda item: rank.get(item[0], len(rank)))[:4]
     several = len(hero_records) > 1
     watch_by_id = {w.get("id"): w for w in watchlists}
-    pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0, readings=watch_by_id.get(r.get("readings_id")))
+    letters: dict[str, str] = {}
+    for pid, r in hero_records:
+        theme = (r.get("pack") or {}).get("theme_id")
+        letters[pid] = chr(65 + sum(1 for q in letters if (followed[q].get("pack") or {}).get("theme_id") == theme))
+    pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0, readings=watch_by_id.get(r.get("readings_id")),
+                                   letter=letters.get(pid))
                    for n, (pid, r) in enumerate(hero_records)}
     hero_follows = {r.get("follow_id") for pid, r in hero_records}
     # A Pack's readings are summed up on its own card; only readings you follow on their own get a card here.
     own = [_thesis_hero(r) for r in theses[:3]] or [
         h for h in (_readings_hero(r) for r in [w for w in watchlists if w.get("follow_id") not in hero_follows][:2]) if h]
     heroes = list(pack_heroes.values()) + own
+    # One picture per sector of where its followed theses sit in the chain.
+    diagrams = []
+    themes_seen: list[str] = []
+    for pid, r in hero_records:
+        theme = (r.get("pack") or {}).get("theme_id")
+        if theme and theme not in themes_seen:
+            themes_seen.append(theme)
+    for theme in themes_seen:
+        group = [(chr(65 + n), r["pack"], [row for row in ((watch_by_id.get(r.get("readings_id")) or {}).get("last_check") or {}).get("rows") or []
+                                           if isinstance(row, dict)])
+                 for n, (pid, r) in enumerate([(pid, r) for pid, r in hero_records if (r.get("pack") or {}).get("theme_id") == theme])]
+        diagrams.append(_chain_3d(theme, group))
     if heroes:
-        body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
+        body.append('<h2 id="glance">At a glance</h2>' + "".join(d for d in diagrams if d) + "".join(heroes))
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
@@ -689,7 +785,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
 --body:Inter,-apple-system,"Segoe UI",system-ui,sans-serif}}
 @media (prefers-color-scheme:dark){{:root{{--paper:#121a16;--paper-bright:#18221d;--ink:#e9ece4;--forest:#9cc7ae;--forest-2:#8fbfa3;
 --sage:#24332b;--gold:#d2ab66;--line:#2f3d35;--muted:#9aa49d;--warn:#e0a35e;--seen:#8fbfa3;--against:#f08a80;--late:#e0a35e;--nodata:#8d958f}}}}
-*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
+*{{box-sizing:border-box}}.layout{{display:grid;grid-template-columns:210px minmax(0,1fr);gap:28px;max-width:1180px;margin:0 auto;padding:22px 16px 44px}}main{{max-width:none;margin:0;padding:0;min-width:0}}.side{{position:sticky;top:16px;align-self:start;border-right:1px solid var(--line);padding-right:14px}}.side nav{{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}}.side a{{text-decoration:none;color:var(--ink);font-size:14px;padding:6px 8px;border-radius:8px}}.side a:hover{{background:var(--paper-bright)}}.side-label{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}}.side-sub{{font-size:12px;color:var(--muted);padding:0 8px 4px 18px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.row-more summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:4px}}.txt{{min-width:220px;white-space:normal}}.pack-readings{{margin:10px 0 4px;font-size:14px}}.tc-head{{display:flex;align-items:center;gap:10px}}.tc-head .eyebrow{{margin:0}}.tc-link{{margin-left:auto;font-size:13px}}.tc-thesis{{margin:6px 0 10px;font-size:21px;line-height:1.3}}.tc-list{{list-style:none;margin:0;padding:0;display:grid;gap:8px}}.tc-item{{border-left:3px solid var(--forest-2);padding:4px 0 4px 10px}}.tc-row{{display:flex;gap:8px;align-items:baseline}}.tc-n{{font:600 11px var(--mono);color:var(--forest-2)}}.tc-claim{{font-weight:600;flex:1}}.tc-due{{font:11px var(--mono);color:var(--muted);white-space:nowrap}}.tc-chips{{display:flex;flex-wrap:wrap;gap:6px;margin:5px 0 2px}}.chip{{font-size:12.5px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:var(--paper)}}.chg.up{{color:var(--seen)}}.chg.down{{color:var(--against)}}.tc-wrong{{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.tc-next{{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:12px;font-size:13px}}.tc-k{{font:500 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}}.nx.late{{color:var(--late)}}.chain3d svg{{width:100%;height:auto;display:block;margin:6px 0}}.c3-label{{font:500 11px var(--body);fill:var(--muted)}}.c3-label.on{{fill:var(--ink);font-weight:600}}.c3-arrow{{font:14px var(--body);fill:var(--gold)}}.c3-mark{{fill:var(--gold)}}.c3-mark-t{{font:600 10.5px var(--mono);fill:#1b1b1b}}.c3-legend{{list-style:none;margin:4px 0 6px;padding:0;font-size:13.5px;display:grid;gap:2px}}.c3-legend b{{display:inline-block;width:20px;color:var(--forest-2)}}.tc-letter{{font:600 12px var(--mono);background:var(--forest-2);color:#fff;border-radius:6px;padding:1px 7px}}.side-co{{display:flex;justify-content:space-between;gap:6px;font-size:13px;padding:4px 8px}}.side-co small{{font:11px var(--mono);color:var(--muted)}}.side-foot{{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}}@media (max-width:760px){{.layout{{grid-template-columns:1fr;gap:6px}}.side{{position:static;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}}.side nav{{flex-direction:row;flex-wrap:wrap;margin-bottom:6px}}.side-sub,.side-label,.side-foot,.side nav.cos{{display:none}}}}body{{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body)}}
 
 .brand{{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;margin-bottom:18px}}.brand svg{{flex:0 0 auto}}
 .eyebrow{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:0 0 6px}}
