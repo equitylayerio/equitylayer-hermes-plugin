@@ -93,15 +93,16 @@ def test_start_skill_offers_the_websites_sectors_in_order():
     from equitylayer_plugin.profile_store import SECTORS
 
     # Mirrors ONBOARDING_SECTORS in EquityLayer's lib/harness.ts (AC, 2026-11-10).
-    assert [s["label"] for s in SECTORS] == [
-        "CPO and optical networking", "Space infrastructure", "Custom AI chips (ASIC)", "Something else"]
+    assert [s["label"] for s in SECTORS] == ["CPO and optical networking", "Custom AI chips (ASIC)", "Something else"]
+    from equitylayer_plugin.profile_store import COMING_NEXT
+    assert [s["id"] for s in COMING_NEXT] == ["space_infrastructure"]
     assert [s["id"] for s in SECTORS if s["recommended"]] == ["optical_cpo"]
     text = (ROOT / "skills" / "start" / "SKILL.md").read_text(encoding="utf-8")
     for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
                    "el_profile", "Follow EquityLayer's Research Packs (recommended)",
                    "call `el_track` with each chosen `pack_id`, one call per Pack",
                    "name the ones they want", "in the order the registry lists them (EquityLayer's thesis Packs come first)", "`el_check` with each `item_id`", "`el_seen` with each `item_id`",
-                   "If the sector has no published Pack, use decision 2's list without one.",
+                   "If the sector has no published Pack, use decision 2's list without one.", "Coming next: ",
                    "1. Follow the curated readings (recommended)",
                    "On yes, call `el_track` with the title", "On yes, call `el_track` with the harness",
                    "el_dashboard_render", "call `el_track` with that `item_id` and the harness",

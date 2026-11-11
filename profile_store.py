@@ -21,21 +21,23 @@ from .harness_store import PLUGIN_NAME, today_taipei
 # Mirrors ONBOARDING_SECTORS in EquityLayer's setup prompt (lib/harness.ts). Order and wording are AC's
 # (2026-11-10). Update both, and the coverage table in the README, when a theme goes live.
 SECTORS = (
-    {"id": "optical_cpo", "label": "CPO and optical networking", "status": "live readings", "recommended": True,
+    {"id": "optical_cpo", "label": "CPO and optical networking", "status": "live readings and EquityLayer Research Packs",
+     "recommended": True,
      "gloss": "Co-packaged optics: the optics move next to the switch chip, so data leaves the chip as light."},
-    {"id": "space_infrastructure", "label": "Space infrastructure",
-     "status": "variables are being added; today you would mostly see gaps", "recommended": False,
-     "gloss": "Launch cadence and satellite backlog turning into revenue for launch and satellite suppliers."},
-    {"id": "custom_asic", "label": "Custom AI chips (ASIC)", "status": "live readings, tracking only, no Research Pack",
+    {"id": "custom_asic", "label": "Custom AI chips (ASIC)", "status": "live readings, no Research Pack yet",
      "recommended": False,
      "gloss": "Chips designed for one hyperscaler's own AI workloads, built with design-service partners and foundries."},
     {"id": "other", "label": "Something else",
-     "status": "for example Physical AI (variables listed, most readings withheld) or your own topic; "
-               "the planner says what the catalog cannot cover",
+     "status": "track your own thesis on any topic; the planner says what the catalog cannot cover yet",
      "recommended": False, "gloss": ""},
 )
-SECTOR_IDS = tuple(s["id"] for s in SECTORS) + ("physical_ai",)
-SECTOR_LABELS = {s["id"]: s["label"] for s in SECTORS} | {"physical_ai": "Physical AI"}
+# Not offered as options yet: named in one "Coming next" line (AC, 2026-11-11).
+COMING_NEXT = (
+    {"id": "space_infrastructure", "label": "Space infrastructure"},
+)
+SECTOR_IDS = tuple(s["id"] for s in SECTORS) + tuple(s["id"] for s in COMING_NEXT) + ("physical_ai",)
+SECTOR_LABELS = ({s["id"]: s["label"] for s in SECTORS} | {s["id"]: s["label"] for s in COMING_NEXT}
+                 | {"physical_ai": "Physical AI"})
 CHECKS = ("daily", "weekly", "manual")
 
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

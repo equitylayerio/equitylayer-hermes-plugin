@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from . import formatters
 from .harness_store import TAIPEI, HarnessStore, default_harness_store
-from .profile_store import SECTORS, ProfileStore, default_profile_store, describe, validate_fields
+from .profile_store import COMING_NEXT, SECTORS, ProfileStore, default_profile_store, describe, validate_fields
 from .watch_store import WatchStore, default_watch_store
 from .watch_tools import WatchTools
 from .track_tools import TrackTools
@@ -690,6 +690,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             "saved_watchlists": [{"id": r.get("id"), "title": r.get("title"), "variables": r.get("variables")}
                                  for r in watchlists][:10],
             "sectors": [dict(s) for s in SECTORS],
+            "coming_next": [s["label"] for s in COMING_NEXT],
             "stored": "local only; never sent to EquityLayer",
         }
 

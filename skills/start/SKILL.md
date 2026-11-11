@@ -30,12 +30,12 @@ Call `el_profile` (no fields) and `el_research_pack` (action `list`).
   3. Add my own thesis to readings I follow: ask for their view in one sentence (or the three questions), propose the card, and on yes call `el_track` with that `item_id` and the harness. The readings stay under the same id and become the thesis's evidence.
   4. Add a sector.
   Skip any decision already answered.
-- If the registry lists Research Packs, note them inside the matching sector option, so decision 1 keeps four options: published ones as "EquityLayer Packs available" with how many (or "Pack available" for one); one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector with published Packs, decision 2 gets them as option 1 (see there). An in-review Pack cannot be read or followed yet; say so. If the sector has no published Pack, use decision 2's list without one.
+- If the registry lists Research Packs, note them inside the matching sector option, so decision 1 keeps the same options: published ones as "EquityLayer Packs available" with how many (or "Pack available" for one); one with status `in_review` as "EquityLayer Pack in review, not published yet". If they pick a sector with published Packs, decision 2 gets them as option 1 (see there). An in-review Pack cannot be read or followed yet; say so. If the sector has no published Pack, use decision 2's list without one.
 - If it lists none, say so in one short line inside decision 1. It is not a step of its own.
 
 ## Decision 1. Which sector?
 
-Offer the four `sectors` from `el_profile`, in order, with their status, CPO recommended. Gloss the one they pick.
+Offer the `sectors` from `el_profile` as numbered options, in order, with their status, CPO recommended. Then one line, not an option: "Coming next: " and the `coming_next` labels. If the person asks for one of those, say it is coming next and offer CPO or their own thesis. Gloss the one they pick.
 
 **Before decision 2, lead with EquityLayer's theses.** If the registry lists published Packs for the sector, call `el_research_pack` (action `read`) for each and show them first, in the registry's order (thesis Packs first). For each, two plain lines:
 - its title, as the thesis it holds (with "Thesis Pack" or "Tracking Pack" when the registry gives `category`);
