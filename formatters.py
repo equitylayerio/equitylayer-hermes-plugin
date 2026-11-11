@@ -60,6 +60,7 @@ def format_registry(
         [
             entry.get("id"),
             entry.get("title"),
+            {"thesis": "thesis Pack", "tracking": "tracking Pack"}.get(entry.get("category") or "", ""),
             status(entry),
             "locked" if entry.get("locked") else entry.get("access"),
             entry.get("fresh_until"),
@@ -67,7 +68,7 @@ def format_registry(
         ]
         for entry in entries
     ]
-    table = _table(["id", "title", "status", "access", "fresh until", "next check"], rows)
+    table = _table(["id", "title", "type", "status", "access", "fresh until", "next check"], rows)
     in_review = any(status(e).startswith("in review") for e in entries)
     published = any(not status(e).startswith("in review") for e in entries)
     return _join(

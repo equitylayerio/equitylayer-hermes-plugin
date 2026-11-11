@@ -290,6 +290,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         return {
             "id": entry.get("id"),
             "kind": entry.get("kind"),
+            "category": entry.get("category") if entry.get("category") in ("thesis", "tracking") else None,
             "title": entry.get("title"),
             "publisher": (entry.get("publisher") or {}).get("name") if isinstance(entry.get("publisher"), dict) else None,
             "status": entry.get("status"),

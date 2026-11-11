@@ -394,3 +394,11 @@ def test_preview_puts_the_theses_before_the_live_readings():
     assert page.index("EquityLayer Research Pack · Thesis Pack") < page.index('<h2 id="live">')
     assert page.index("EquityLayer's research for this sector") < page.index('<h2 id="live">')
     assert "Your thesis" not in page  # a thesis Pack is EquityLayer's, never shown as the person's own
+
+
+
+def test_registry_list_shows_the_pack_type(make_service):
+    service, _, _ = make_service({**PACK_ROUTES})
+    import json as _json, pathlib as _pl
+    listed = call(service.el_research_pack, {"action": "list"})
+    assert "| type |" in listed["markdown"] or "type" in listed["markdown"].splitlines()[2]
