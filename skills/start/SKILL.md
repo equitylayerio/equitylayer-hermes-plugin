@@ -69,7 +69,7 @@ Offer exactly one of these two lists, with one option marked recommended.
 3. Help me form a view
 
 What each option means:
-- **Follow EquityLayer's Research Packs:** how many, and each title in one line. Reason: they are EquityLayer's own theses for the sector, so they start from worked-out views, each hypothesis with what would prove it wrong and the readings it watches. Say plainly that "verified" means their sources and claims were checked, not that a thesis is right, and give the hypotheses' confidence.
+- **Follow EquityLayer's Research Packs:** how many, and each title in one line, in the order the registry lists them. Reason: they are EquityLayer's own theses for the sector, so they start from worked-out views, each hypothesis with what would prove it wrong and the readings it watches. Say plainly that "verified" means their sources and claims were checked, not that a thesis is right, and give the hypotheses' confidence.
 - **Follow the curated readings.** No view needed. I tell you what moved at each check, and you can add a view later.
 - **I have a view.** They write it in one sentence in their own words.
 - **Help me form a view.** Ask up to three short questions, one per message:
@@ -82,7 +82,7 @@ A view takes a stand and could be wrong.
 
 ## Decision 3. One card to approve
 
-**For EquityLayer's Research Packs:** call `el_research_pack` (action `read`) for each published Pack of the sector. Show one card, not the whole Packs. For each Pack:
+**For EquityLayer's Research Packs:** call `el_research_pack` (action `read`) for each published Pack of the sector. Show one card, not the whole Packs, with the Packs in the order the registry lists them (EquityLayer's thesis Packs come first). For each Pack:
 - its title and view, in one sentence;
 - each hypothesis in one plain line, with its confidence, what would prove it wrong and by when;
 - the readings it watches.

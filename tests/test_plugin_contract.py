@@ -100,7 +100,7 @@ def test_start_skill_offers_the_websites_sectors_in_order():
     for phrase in ("One question per message", "(recommended)", "Never write a view for the person",
                    "el_profile", "Follow EquityLayer's Research Packs (recommended)",
                    "call `el_track` with each chosen `pack_id`, one call per Pack",
-                   "name the ones they want", "`el_check` with each `item_id`", "`el_seen` with each `item_id`",
+                   "name the ones they want", "in the order the registry lists them (EquityLayer's thesis Packs come first)", "`el_check` with each `item_id`", "`el_seen` with each `item_id`",
                    "If the sector has no published Pack, use decision 2's list without one.",
                    "1. Follow the curated readings (recommended)",
                    "On yes, call `el_track` with the title", "On yes, call `el_track` with the harness",

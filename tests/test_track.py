@@ -342,3 +342,21 @@ def test_pack_readings_titles_fit():
     from equitylayer_plugin import tools
 
     assert "room = 80 - len(prefix)" in inspect.getsource(tools.EquityLayerTools._attach_pack)
+
+
+
+def test_followed_packs_keep_the_registry_order():
+    from equitylayer_plugin.dashboard import render
+
+    packs = [{"id": pid, "kind": "pack", "title": pid, "theme_id": "optical_cpo", "status": "verified", "access": "public"}
+             for pid in ("cpo-laser-inp-test-bottleneck", "cpo-timing-and-form", "taiwan-optical-revenue-vs-cpo-guidance")]
+    # Local files sort by next check, so the Taiwan Pack would come first without the registry's order.
+    followed = {pid: {"follow_id": "follow_" + str(n) * 32, "target_id": pid, "next_check_at": f"2026-11-1{n}",
+                      "pack": {"title": f"Title {pid}", "theme_id": "optical_cpo", "hypotheses": []}}
+                for n, pid in ((3, "cpo-laser-inp-test-bottleneck"), (4, "cpo-timing-and-form"),
+                               (1, "taiwan-optical-revenue-vs-cpo-guidance"))}
+    followed = dict(sorted(followed.items(), key=lambda kv: kv[1]["next_check_at"]))
+    page = render(None, [], [], packs=packs, followed=followed)
+    order = [page.index(f"Title {pid}") for pid in ("cpo-laser-inp-test-bottleneck", "cpo-timing-and-form",
+                                                    "taiwan-optical-revenue-vs-cpo-guidance")]
+    assert order == sorted(order)

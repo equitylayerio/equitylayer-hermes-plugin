@@ -529,8 +529,11 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     for record in theses:
         groups.setdefault(_theme_of(record), {"watch": [], "theses": []})["theses"].append(record)
     unpublished = {pid for pid, r in followed.items() if r.get("unavailable_since")}
-    hero_records = [(pid, r) for pid, r in followed.items()
-                    if isinstance(r.get("pack"), dict) and pid not in unpublished][:4]
+    # Keep the registry's order (EquityLayer lists its thesis Packs first), not the order of the local files.
+    rank = {p.get("id"): n for n, p in enumerate(packs or []) if isinstance(p, dict)}
+    hero_records = sorted(((pid, r) for pid, r in followed.items()
+                           if isinstance(r.get("pack"), dict) and pid not in unpublished),
+                          key=lambda item: rank.get(item[0], len(rank)))[:4]
     several = len(hero_records) > 1
     pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0) for n, (pid, r) in enumerate(hero_records)}
     hero_follows = {r.get("follow_id") for pid, r in hero_records}
