@@ -518,3 +518,6 @@ def test_card_shows_sources_and_what_moves_if_a_hypothesis_holds():
     page = render(None, [], [watch], followed={"p": record})
     assert ">If it holds<" in page and "optical modules gain (per the Pack)" in page
     assert ">Sources<" in page and '<a href="https://www.sec.gov/x">Coherent</a>' in page
+    summary["hypotheses"][0]["moves"] = []
+    page = render(None, [], [watch], followed={"p": record})
+    assert "not stated in the Pack yet" in page and "If it fails" not in page  # nothing is inferred
