@@ -503,6 +503,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     ]
     if empty:
         body.append('<section class="card"><p>Nothing tracked yet. In Hermes, type <code>/equitylayer:start</code>.</p></section>')
+    live_block = ""
     if preview:
         card = _watch_card({"title": preview.get("title"), "pending": None,
                             "last_check": {"as_of": preview.get("as_of"), "rows": preview.get("rows") or [],
@@ -512,10 +513,10 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                       and p.get("theme_id") == preview.get("theme") and p.get("status") == "verified"
                       and p.get("access") == "public" and _pack_id(p.get("id")) and p.get("id") not in followed]
         pack = open_packs[0] if open_packs else None
-        theses = [p for p in open_packs if p.get("category") == "thesis"]
-        if theses:  # with categories, the recommendation is EquityLayer's thesis Packs
-            follow_label = ("Follow EquityLayer's thesis Pack" if len(theses) == 1
-                            else f"Follow EquityLayer's thesis Packs ({len(theses)})")
+        thesis_packs = [p for p in open_packs if p.get("category") == "thesis"]
+        if thesis_packs:  # with categories, the recommendation is EquityLayer's thesis Packs
+            follow_label = ("Follow EquityLayer's thesis Pack" if len(thesis_packs) == 1
+                            else f"Follow EquityLayer's thesis Packs ({len(thesis_packs)})")
             follow_send = "I'd like to follow EquityLayer's thesis Packs. Show me their card first."
         else:
             follow_label = ("Follow EquityLayer's Research Pack" if len(open_packs) == 1
@@ -530,7 +531,7 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                    'Follow these readings</button>'
                    '<button type="button" class="ghost" data-hermes-send="I have my own view.">I have my own view</button>'
                    '</div>')
-        body.append('<h2 id="live">Live now</h2>' + card + actions)
+        live_block = '<h2 id="live">Live now</h2>' + card + actions
         for row in preview.get("rows") or []:
             sources += [a for a in row.get("attribution") or [] if a not in sources]
     groups: dict[str, dict[str, list]] = {}
@@ -555,7 +556,13 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
-    body += _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(pack_heroes) | unpublished)
+    cards = _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(pack_heroes) | unpublished)
+    if cards and not heroes:  # before anything is followed, EquityLayer's theses lead and the readings follow
+        body.append('<h2 id="theses">EquityLayer\'s research for this sector</h2>')
+    body += cards
+    # Theses first (followed ones above, published ones next), then the live readings behind them.
+    if live_block:
+        body.append(live_block)
     if needs:
         body.append(f'<section class="card needs" id="needs"><h2>Needs you</h2><ul>{"".join(needs)}</ul></section>')
     if groups:

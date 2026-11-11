@@ -381,3 +381,16 @@ def test_pack_categories_label_cards_and_put_thesis_packs_first():
     page = render(None, [], [], preview=preview, packs=packs, followed={})  # before the field ships: no label
     assert "Thesis Pack" not in page and "Tracking Pack" not in page
     assert "Follow EquityLayer&#x27;s Research Packs (3)" in page
+
+
+
+def test_preview_puts_the_theses_before_the_live_readings():
+    from equitylayer_plugin.dashboard import render
+
+    packs = [{"id": "cpo-timing-and-form", "kind": "pack", "title": "Timing", "theme_id": "optical_cpo",
+              "status": "verified", "access": "public", "category": "thesis"}]
+    preview = {"title": "CPO live readings", "as_of": "2026-11-11", "rows": [], "theme": "optical_cpo"}
+    page = render(None, [], [], preview=preview, packs=packs, followed={})
+    assert page.index("EquityLayer Research Pack · Thesis Pack") < page.index('<h2 id="live">')
+    assert page.index("EquityLayer's research for this sector") < page.index('<h2 id="live">')
+    assert "Your thesis" not in page  # a thesis Pack is EquityLayer's, never shown as the person's own
