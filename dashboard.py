@@ -276,6 +276,46 @@ def _band(rules: list[dict], value: Any) -> dict | None:
 MEANS = {"strengthens": ("up", "supports"), "weakens": ("down", "weakens"), "fires": ("down", "breaks")}
 
 
+def hypothesis_signal(h: dict, by_var: dict) -> str:
+    """supports / weakens / no_verdict, by the Pack's own reading rules, for readings after each baseline.
+    A state an agent can act on by its own rules; it is not a recommendation."""
+    reads = h.get("reads") if isinstance(h.get("reads"), dict) else {}
+    verdicts = []
+    for v in h.get("variables") or []:
+        spec = reads.get(v) if isinstance(reads.get(v), dict) else {}
+        latest = (by_var.get(v) or {}).get("latest") or {}
+        if not spec.get("baseline") or not latest or latest.get("period") == spec.get("baseline"):
+            continue
+        rule = _band(spec.get("rules") or [], latest.get("value"))
+        if rule:
+            verdicts.append(str(rule.get("means")))
+    if any(m in ("weakens", "fires") for m in verdicts):
+        return "weakens"
+    return "supports" if verdicts and all(m == "strengthens" for m in verdicts) else "no_verdict"
+
+
+def _model_line(row: dict) -> tuple[str, str]:
+    """Which line of a company's financial model a reading feeds, and how often it lands.
+
+    Read off the variable itself (id, unit, name); nothing here is an estimate or a new fact."""
+    var = str(row.get("variable") or "").lower()
+    name = str(row.get("name") or "").lower()
+    latest = row.get("latest") or {}
+    cadence = "monthly" if var.endswith(".monthly") else "quarterly" if var.endswith(".quarterly") else "yearly" if var.endswith(".annual") else ""
+    if str(row.get("unit") or "").lower() == "statement" or isinstance(latest.get("value"), str):
+        return "orders and outlook (management statements, not revenue yet)", "leading"
+    if "gross_margin" in var or "gross margin" in name:
+        return "gross margin", f"reported {cadence}".strip()
+    if any(k in var for k in ("capex", "equipment", "ppe")) or "capital" in name or "equipment" in name:
+        return "capex", f"reported {cadence}".strip()
+    if "revenue" in var or "revenue" in name:
+        segment = "segment" in name or ".revenue." not in var
+        line = "segment revenue" if segment else "company revenue"
+        when = "monthly, an early read on the quarter" if cadence == "monthly" else f"reported {cadence}".strip()
+        return line, when
+    return "", cadence
+
+
 def _cond(cond: Any) -> str:
     """A rule's condition with readable numbers: '>= 540492' becomes '≥ 540,492'."""
     import re as _re
@@ -379,6 +419,12 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
                     out.append(_clip(cond, 110))
             return " · ".join(out[:3])
 
+        feeds: dict[str, list[str]] = {}
+        for row, _ in found:
+            model, when = _model_line(row)
+            if model:
+                feeds.setdefault(f"{model} · {when}" if when else model, []).append(_company(row))
+        feeds_text = " · ".join((text if len(feeds) == 1 else f"{', '.join(names)}: {text}") for text, names in feeds.items())
         why = h.get("angle") or next(
             (r.get("say") for row, _ in found
              for r in ((reads.get(row.get("variable")) or {}).get("rules") or []) if isinstance(reads.get(row.get("variable")), dict)
@@ -410,6 +456,7 @@ def _pack_hero(record: dict, compact: bool = False, open_: bool = True, readings
                  + line("Most think", _clip(h.get("consensus"), 130))
                  + line("Why it matters", _clip(why, 130))
                  + line("Tracks", chips, raw=True)
+                 + line("Model line", feeds_text)
                  + line("Supports if", bars("strengthens"), "good")
                  + line("Weakens if", bars("weakens"), "bad")
                  + line("Wrong if", _clip(wrong, 120), "bad", title=wrong)
@@ -1044,7 +1091,7 @@ JSON_FORMAT = "equitylayer-hermes-dashboard/1"
 def _reading(row: dict) -> dict:
     latest = row.get("latest") or {}
     return {"variable": row.get("variable"), "name": row.get("name"), "company": _company(row),
-            "entity": row.get("entity"),
+            "entity": row.get("entity"), "model_line": _model_line(row)[0] or None, "timing": _model_line(row)[1] or None,
             "period": latest.get("period"), "value": latest.get("value"), "unit": row.get("unit"),
             "withheld": latest.get("withheld"), "change": row.get("change") or None,
             "next_reading": row.get("next_reading"), "caveat": row.get("caveat"), "source_url": row.get("source_url")}
@@ -1080,6 +1127,7 @@ def snapshot(theses: list[dict], watchlists: list[dict], followed: dict[str, dic
                 "confidence": h.get("confidence"), "test_by": h.get("due"), "wrong_if": h.get("falsifier"),
                 "if_it_holds": h.get("moves") or [],
                 "role": h.get("role") or "core", "why_it_matters": h.get("angle"), "most_think": h.get("consensus"),
+                "signal": hypothesis_signal(h, by_var),
                 "tracks": [_reading(by_var[v]) if v in by_var else {"variable": v} for v in h.get("variables") or []],
             } for n, h in enumerate([h for h in summary.get("hypotheses") or [] if isinstance(h, dict)], 1)],
             "readings_unread": isinstance(watch.get("pending"), dict),
