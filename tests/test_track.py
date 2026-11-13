@@ -192,7 +192,7 @@ def test_following_a_pack_keeps_its_thesis_and_follows_its_readings(make_service
     assert json.loads((tmp_path / "watchlists" / f"{readings_id}.json").read_text())["pending"] is None
 
     page = open(call(service.el_dashboard_render)["artifact_file"], encoding="utf-8").read()
-    glance = page[page.index("At a glance"):page.index("Evidence")]
+    glance = page[page.index('id="glance"'):page.index('id="evidence"')]
     assert '<p class="eyebrow">Thesis Pack · CPO</p>' in glance
     assert "Wrong if" in glance and "LandMark, a laser epi supplier" in glance
     assert "Follow this Pack" not in page and "has not published" not in page
@@ -294,7 +294,7 @@ def test_several_packs_in_one_sector(make_service):
                       "next_check_at": "2026-11-12"}
                 for n, pid in enumerate(("cpo-timing-and-form", "cpo-laser-inp-test-bottleneck"), 1)}
     page = render(None, [], [], packs=packs, followed=followed)
-    glance = page[page.index("At a glance"):]
+    glance = page[page.index('id="glance"'):]
     assert glance.count('<p class="eyebrow">Thesis Pack · CPO</p>') == 2
     assert glance.count('<details open><summary class="tc-row">') == 1  # only the first hypothesis starts open
     assert glance.count('<details><summary class="tc-row">') == 3

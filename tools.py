@@ -18,6 +18,7 @@ from .watch_store import WatchStore, default_watch_store
 from .watch_tools import WatchTools
 from .track_tools import TrackTools
 from . import dashboard as dashboard_page
+from . import pack_card as card_model
 from .harness_tools import HarnessTools
 from .follows import FollowStore, apply_caller_action, build_record, default_store, is_due, target_of
 from .mcp_client import DEFAULT_MCP_URL, McpClient, McpError
@@ -399,6 +400,22 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
             self._refresh_dashboard()
         return self._follow_result(record, path=str(path))
 
+    def _attach_card(self, record: dict) -> None:
+        """Keep EquityLayer's own card for the Pack, so the dashboard shows the same card as the website and chat.
+
+        Best effort: a server without the card format answers with an error, and the dashboard then builds the
+        card from the Pack summary and the readings it already has."""
+        try:
+            card = self._call("get_research_pack", {"pack_id": record.get("target_id"), "format": "card"})
+        except Exception as exc:  # noqa: BLE001 - the card is extra; the follow and its summary are saved
+            logger.info("EquityLayer Pack card not read: %s", getattr(exc, "code", type(exc).__name__))
+            record.pop("card", None)
+            return
+        if card_model.is_server_card(card):
+            record["card"] = card
+        else:
+            record.pop("card", None)
+
     def _attach_pack(self, store: FollowStore, record: dict) -> None:
         """Keep the Pack's thesis on the follow, and follow the readings it watches as its evidence.
 
@@ -411,6 +428,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
         if not summary:
             return
         record["pack"] = summary
+        self._attach_card(record)
         variables = summary.get("variables") or []
         if variables and not record.get("readings_id"):
             theme = summary.get("theme_id") if summary.get("theme_id") in dashboard_page.THEME_LABELS else None
@@ -620,6 +638,7 @@ class EquityLayerTools(TrackTools, HarnessTools, WatchTools):
                 summary = formatters.pack_summary(self._call("get_research_pack", {"pack_id": new_record.get("target_id")}))
                 if summary:
                     new_record["pack"] = summary
+                    self._attach_card(new_record)
                     store.save(new_record)
                     watch = self._watch_store().get(new_record["readings_id"]) if new_record.get("readings_id") else None
                     if watch and summary.get("variables") and summary["variables"] != watch.get("variables"):

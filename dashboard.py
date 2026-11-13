@@ -17,6 +17,7 @@ from typing import Any
 from .harness_store import TAIPEI, is_due
 from .profile_store import describe
 from .watch_store import is_watch_due
+from . import pack_card as card_model
 
 FILE_NAME = "dashboard.html"
 # Where each sector's public page lives; the dashboard links there as the way to EquityLayer's own research.
@@ -583,7 +584,7 @@ def _short_name(title: Any) -> str:
 
 
 def _sidebar(groups: dict, watchlists: list[dict], preview: dict | None, needs: bool) -> str:
-    items = ['<p class="side-label">Workspace</p><nav><a href="#glance">At a glance</a>']
+    items = ['<p class="side-label">Workspace</p><nav><a href="#glance">Your Research Packs</a>']
     if preview:
         items.append('<a href="#live">Live now</a>')
     if needs:
@@ -689,13 +690,19 @@ def _pack_cards(themes: list[str], packs: list[dict] | None, followed: dict[str,
 
 
 def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str = "") -> str:
+    """A listed Pack in the same card shape as a followed one: industry first, then the Pack and one action."""
     state = "you follow it" if follow is not None else "published"
     kind = CATEGORY_LABELS.get(entry.get("category") or ((follow or {}).get("pack") or {}).get("category"))
     eyebrow = (kind or "Research Pack") + (f" · {label}" if label else "") + f" · {state}"
-    parts = [f'<section class="card pack"><p class="eyebrow">{_e(eyebrow)}</p>',
+    theme = entry.get("theme_id") or ((follow or {}).get("pack") or {}).get("theme_id")
+    industry = card_model.industry(theme)[0] if theme else "Research Pack"
+    pill = "Following" if follow is not None else "Not following"
+    parts = [f'<article class="pc-card" data-state="{"up_to_date" if follow is not None else "not_following"}">'
+             f'<div class="pc-top"><span class="pc-industry">{_e(industry)}</span><span class="pc-state">{pill}</span></div>'
+             f'<p class="pc-meta">{_e(eyebrow)}</p>',
              f'<h3>{_e(entry.get("title") or entry.get("id"))}</h3>']
     if entry.get("view"):
-        parts.append(f'<p class="tc-view" title="{_e(as_of)}">{_e(_clip(entry["view"], 160))}</p>')
+        parts.append(f'<p class="tc-view small" title="{_e(as_of)}">{_e(_clip(entry["view"], 160))}</p>')
     url = _pack_url(entry)
     link = f'<a class="go" href="{_e(url)}">Read it on equitylayer.io →</a>' if url else ""
     if follow is not None:
@@ -706,14 +713,14 @@ def _pack_card(entry: dict, label: str | None, follow: dict | None, as_of: str =
         else:
             parts.append('<p class="muted small">Checked with your other items' + (f"; next check {_e(due)}" if due else "")
                          + '. Hermes shows you when the Pack changes.</p>')
-        parts.append(f"<p>{link}</p>" if link else "")
+        parts.append(f'<div class="pc-foot">{link}</div>' if link else "")
     else:
         pid = _pack_id(entry.get("id"))
-        parts.append('<div class="actions">'
+        parts.append('<div class="pc-foot"><div class="actions">'
                      + (f'<button type="button" data-hermes-send="Follow the EquityLayer Research Pack {pid}.">'
                         'Follow this Pack</button>' if pid else "")
-                     + link + "</div>")
-    return "".join(parts) + "</section>"
+                     + "</div>" + link + "</div>")
+    return "".join(parts) + "</article>"
 
 
 # The full chain each sector is drawn on, left to right (company_roles.json steps, in order).
@@ -836,6 +843,78 @@ def _chain_3d(theme: str, packs: list[tuple[str, dict, list[dict]]]) -> str:
             'a hypothesis.</p></section>')
 
 
+
+# --- Research Pack cards: the same card EquityLayer shows on its website and in chat (show_research_pack_card).
+CARD_STATE = {"new_version": "New version", "moved": "Changed · review", "check_due": "Check due", "up_to_date": "Up to date"}
+# Only a change waiting for the person moves a card up; otherwise the registry order holds (thesis Packs first).
+CARD_STATE_ORDER = {"new_version": 0, "moved": 0, "check_due": 1, "up_to_date": 1}
+PC_CSS = """
+.pc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:14px;margin:10px 0}
+.pc-card{display:flex;flex-direction:column;gap:10px;min-width:0;padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:var(--paper-bright);overflow-wrap:anywhere}
+.pc-card[data-state=new_version],.pc-card[data-state=moved]{border-color:var(--forest-2)}.pc-card[data-state=check_due]{border-color:var(--gold)}
+.pc-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pc-industry{padding:4px 10px;border-radius:8px;background:var(--forest);color:var(--paper-bright);font-size:12.5px;font-weight:650}
+.pc-state{font:600 11px/1 var(--body);padding:4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pc-state.new_version,.pc-state.moved{color:var(--forest-2);border-color:var(--forest-2)}.pc-state.check_due{color:var(--late);border-color:var(--late)}
+.pc-meta{margin:0;color:var(--muted);font-size:12px}
+.pc-card h3{margin:0;font:620 17px/1.35 var(--body)}
+.pc-vars{margin:0;padding:0;list-style:none}
+.pc-vars li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.pc-reading{flex:none;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.pc-reading small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+.pc-wrong{margin:0;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,var(--gold) 14%,transparent);font-size:12.5px}.pc-wrong b{display:block;font-size:11px}
+.pc-foot{margin-top:auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;font-size:12px}
+.pc-card .actions{margin:0}.pc-card .actions button{padding:9px 13px;font-size:13px}
+.pc-detail>summary,.pc-agent>summary{cursor:pointer;font-size:12px;color:var(--forest-2)}
+.pc-detail>.card{box-shadow:none;margin:8px 0 0}
+.pc-agent pre{margin:6px 0 0;padding:10px;max-height:300px;overflow:auto;border-radius:8px;background:#18231e;color:#dfe8e1;font:11.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word}
+"""
+
+
+def _pack_state(record: dict, today: str) -> str:
+    pending = record.get("pending_review") if isinstance(record.get("pending_review"), dict) else None
+    if pending:
+        return "new_version" if pending.get("revision_changed") else "moved"
+    due = record.get("next_check_at")
+    return "check_due" if isinstance(due, str) and due <= today else "up_to_date"
+
+
+def _research_pack_card(card: dict, state: str, detail: str = "") -> str:
+    """One Pack as a card: industry, view, three readings, what would prove it wrong, next check.
+    The plugin's fuller Pack view folds under it, and the agent side shows the card as data."""
+    import json
+
+    title = card.get("title") or card.get("pack_id")
+    industry = (card.get("industry") or ["Research"])[0]
+    category = {"thesis": "Thesis Pack", "tracking": "Tracking Pack"}.get(card.get("category") or "", "Research Pack")
+    meta = category  # the version stays on the agent side; "New version" is the card state
+    rows = ""
+    for variable in card_model.front_variables(card):
+        latest = variable.get("latest") or None
+        name = (variable.get("name") or [variable.get("id")])[0]
+        value = (f'{_e(variable.get("change") or _num(latest.get("value")))}<small>{_e(latest.get("period"))}</small>'
+                 if latest else "<small>No public reading yet</small>")
+        rows += f'<li><span>{_e(name)}</span><span class="pc-reading">{value}</span></li>'
+    wrong = (card.get("wrong_if") or [None])[0]
+    next_check = (card.get("check") or {}).get("next_check")
+    send = {"new_version": f"Show me what changed in the Pack {title}.",
+            "moved": f"Show me what changed in the Pack {title}.",
+            "check_due": f"Check the Pack {title} now."}.get(state)
+    label = {"new_version": "Show me what changed", "moved": "Show me what changed", "check_due": "Check it now"}.get(state)
+    link = _https(card.get("cite"))
+    return (f'<article class="pc-card" data-state="{_e(state)}" data-pack="{_e(card.get("pack_id"))}">'
+            f'<div class="pc-top"><span class="pc-industry">{_e(industry)}</span>'
+            f'<span class="pc-state {_e(state)}">{_e(CARD_STATE.get(state, state))}</span></div>'
+            f'<p class="pc-meta">{_e(meta)}</p><h3>{_e(title)}</h3>'
+            + (f'<ul class="pc-vars">{rows}</ul>' if rows else "")
+            + (f'<p class="pc-wrong"><b>Wrong if</b>{_e(wrong)}</p>' if wrong else "")
+            + f'<div class="pc-foot"><span class="pc-meta">{"Next check " + _e(next_check) if next_check else "No check date"}</span>'
+            + (f'<div class="actions"><button type="button" data-hermes-send="{_e(send)}">{_e(label)}</button></div>' if send else "")
+            + (f'<a href="{_e(link)}">Read the evidence →</a>' if link else "") + "</div>"
+            + (f'<details class="pc-detail"><summary>Open the Pack</summary>{detail}</details>' if detail else "")
+            + f'<details class="pc-agent"><summary>Agent side</summary><pre>{_e(json.dumps(card, indent=2, ensure_ascii=False))}</pre></details>'
+            + "</article>")
+
+
 def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now: datetime | None = None,
            preview: dict | None = None, saved_at: str = "", packs: list[dict] | None = None,
            followed: dict[str, dict] | None = None, packs_as_of: str | None = None) -> str:
@@ -954,11 +1033,20 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
     pack_heroes = {pid: _pack_hero(r, compact=several, open_=n == 0, readings=watch_by_id.get(r.get("readings_id")),
                                    letter=letters.get(pid))
                    for n, (pid, r) in enumerate(hero_records)}
+    today = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d")
+    pack_cards = []
+    for pid, r in hero_records:
+        rows = {row.get("variable"): row for row in ((watch_by_id.get(r.get("readings_id")) or {}).get("last_check") or {}).get("rows") or []
+                if isinstance(row, dict)}
+        card = card_model.build(r["pack"], rows, r.get("next_check_at"), r.get("card"))
+        state = _pack_state(r, today)
+        pack_cards.append((CARD_STATE_ORDER.get(state, 9), len(pack_cards), _research_pack_card(card, state, pack_heroes[pid])))
+    pack_cards.sort()
     hero_follows = {r.get("follow_id") for pid, r in hero_records}
     # A Pack's readings are summed up on its own card; only readings you follow on their own get a card here.
     own = [_thesis_hero(r) for r in theses[:3]] or [
         h for h in (_readings_hero(r) for r in [w for w in watchlists if w.get("follow_id") not in hero_follows][:2]) if h]
-    heroes = list(pack_heroes.values()) + own
+    heroes = own
     # One picture per sector of where its followed theses sit in the chain.
     diagrams = []
     themes_seen: list[str] = []
@@ -971,15 +1059,22 @@ def render(profile: dict | None, theses: list[dict], watchlists: list[dict], now
                                            if isinstance(row, dict)])
                  for n, (pid, r) in enumerate([(pid, r) for pid, r in hero_records if (r.get("pack") or {}).get("theme_id") == theme])]
         diagrams.append(_chain_3d(theme, group))
-    if heroes:
-        body.append('<h2 id="glance">At a glance</h2>' + "".join(d for d in diagrams if d) + "".join(heroes))
+    if pack_cards:
+        body.append('<h2 id="glance">Your Research Packs</h2><div class="pc-grid">' + "".join(c for _, _, c in pack_cards) + "</div>"
+                    + "".join(heroes)
+                    + ('<details class="more"><summary>Where they sit in the supply chain</summary>' + "".join(d for d in diagrams if d) + "</details>"
+                       if any(diagrams) else ""))
+    elif heroes:
+        body.append('<h2 id="glance">At a glance</h2>' + "".join(heroes))
+    heroes = heroes or [c for _, _, c in pack_cards]
     pack_themes = [t for t in sorted({_theme_of(r) for r in watchlists + theses}, key=_theme_order) if t != "other"]
     if preview and preview.get("theme") and preview["theme"] not in pack_themes:
         pack_themes.insert(0, preview["theme"])
     cards = _pack_cards(pack_themes[:3], packs, followed, packs_as_of, skip=set(pack_heroes) | unpublished)
     if cards and not heroes:  # before anything is followed, EquityLayer's theses lead and the readings follow
         body.append('<h2 id="theses">EquityLayer\'s research for this sector</h2>')
-    body += cards
+    if cards:
+        body.append('<div class="pc-grid">' + "".join(cards) + "</div>")
     # Theses first (followed ones above, published ones next), then the live readings behind them.
     if live_block:
         body.append(live_block)
@@ -1045,7 +1140,7 @@ border:1px solid var(--line)}}.arrow{{align-self:center;color:var(--gold)}}
 border:1px solid var(--forest);background:var(--forest);color:#fbfaf5;cursor:pointer}}
 .actions button.ghost{{background:transparent;color:var(--forest)}}
 .sig{{font:500 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:4px;padding:2px 5px;margin-right:6px;vertical-align:1px}}.pack{{border-color:var(--forest-2)}}.hero h3{{font:500 24px/1.25 var(--display);margin:4px 0 8px}}.hero-text.pack-view{{font-size:18px;line-height:1.45;font-family:inherit}}.hyp{{margin:10px 0 6px;padding-left:20px}}.hyp li{{margin:8px 0;line-height:1.45}}.hyp .tag{{white-space:nowrap}}.go{{font-weight:600}}.hero{{border-color:var(--forest-2);padding:20px 22px}}.hero-text{{font:400 26px/1.25 var(--display);margin:4px 0 10px}}.verdict{{font:600 13px/1 var(--body);padding:6px 10px;border-radius:99px;border:1px solid currentColor}}.v-seen{{color:var(--seen)}}.v-against{{color:var(--against)}}.v-late,.v-warn{{color:var(--late)}}.v-no_data{{color:var(--nodata)}}.movers{{margin:4px 0 8px;padding-left:18px}}.theme-h{{font:500 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-2);margin:18px 0 8px}}h2.section{{margin-top:34px}}details.more summary{{cursor:pointer;font:500 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}}.alert{{color:var(--warn);margin:8px 0 0}}.needs{{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 7%,var(--paper-bright))}}
-a{{color:var(--forest-2)}}footer{{margin-top:28px}}
+a{{color:var(--forest-2)}}footer{{margin-top:28px}}{PC_CSS}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){{display:none}}.num{{white-space:normal}}
 td:first-child{{min-width:9em}}.arrow{{display:none}}.step{{min-width:100%}}h1{{font-size:32px}}}}
 </style></head><body><div class="layout">{sidebar}<main>
